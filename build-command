@@ -1,0 +1,1 @@
+g++ -std=gnu++14 -g -Wall -Wextra -Wno-unused-parameter *.cpp -lfuse -o main

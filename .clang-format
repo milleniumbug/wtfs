@@ -1,0 +1,53 @@
+﻿---
+AccessModifierOffset: '0'
+AlignAfterOpenBracket: false
+# AlignAfterOpenBracket: DontAlign
+# AlignConsecutiveAssignments: 'true'
+# AlignConsecutiveDeclarations: 'false'
+AlignEscapedNewlinesLeft: 'false'
+# AlignOperands: 'true'
+AlignTrailingComments: 'true'
+AllowAllParametersOfDeclarationOnNextLine: 'true'
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: 'false'
+AllowShortLoopsOnASingleLine: 'false'
+# AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakBeforeMultilineStrings: 'true'
+AlwaysBreakTemplateDeclarations: 'true'
+# BinPackArguments: 'true'
+BinPackParameters: 'true'
+BreakBeforeBraces: Allman
+ConstructorInitializerAllOnOneLineOrOnePerLine: 'true'
+ConstructorInitializerIndentWidth: '4'
+ContinuationIndentWidth: '4'
+Cpp11BracedListStyle: 'true'
+ForEachMacros: [ 'BOOST_FOREACH' ]
+# IncludeCategories: 
+# - Regex: '^<(cstdlib|csignal|csetjmp|cstdarg|typeinfo|typeindex|type_traits|bitset|functional|utility|ctime|chrono|cstddef|initializer_list|tuple|new|memory|scoped_allocator|climits|cfloat|cstdint|cinttypes|limits|exception|stdexcept|cassert|system_error|cerrno|cctype|cwctype|cstring|cwchar|cuchar|string|array|vector|deque|list|forward_list|set|map|unordered_set|unordered_map|stack|queue|algorithm|iterator|cmath|complex|valarray|random|numeric|ratio|cfenv|iosfwd|ios|istream|ostream|iostream|fstream|sstream|strstream|iomanip|streambuf|cstdio|locale|clocale|codecvt|regex|atomic|thread|mutex|shared_mutex|future|condition_variable|ciso646|ccomplex|ctgmath|cstdalign|cstdbool)'
+#   Priority: 1
+# - Regex: '^<(experimental/)'
+#   Priority: 2
+# - Regex: '^<(assert.h|complex.h|ctype.h|errno.h|fenv.h|float.h|inttypes.h|iso646.h|limits.h|locale.h|math.h|setjmp.h|signal.h|stdalign.h|stdarg.h|stdbool.h|stddef.h|stdint.h|stdio.h|stdlib.h|string.h|tgmath.h|time.h|uchar.h|wchar.h|wctype.h)'
+#   Priority: 3
+# - Regex: '^<(boost/)'
+#   Priority: 4
+IndentCaseLabels: 'false'
+IndentWidth: '4'
+KeepEmptyLinesAtTheStartOfBlocks: 'false'
+MaxEmptyLinesToKeep: '2'
+NamespaceIndentation: None
+PointerAlignment: Left
+# SpaceAfterCStyleCast: 'false'
+SpaceBeforeParens: 'false'
+SpaceInEmptyParentheses: 'false'
+SpacesInAngles: 'false'
+SpacesInCStyleCastParentheses: 'false'
+SpacesInContainerLiterals: 'true'
+SpacesInParentheses: 'false'
+# SpacesInSquareBrackets: 'false'
+Standard: Cpp11
+TabWidth: '4'
+UseTab: ForIndentation
+
+...

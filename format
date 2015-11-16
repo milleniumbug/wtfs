@@ -1,0 +1,2 @@
+#!/bin/bash
+astyle --style=allman --unpad-paren --align-pointer=type --align-reference=type --indent=tab --pad-oper --fill-empty-lines --close-templates --unpad-method-prefix --pad-method-colon=after --indent-preproc-define --indent-preproc-block --indent-labels --max-code-length=100 $@
