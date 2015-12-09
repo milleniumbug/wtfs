@@ -15,7 +15,7 @@ void test_read(const char* path, size_t size)
     char buf[4096] = { 0 };
     {
         int r = read(fd, buf, size < sizeof buf ? size : sizeof buf);
-        printf("read: %d %s\n", r, strerror(errno));
+        printf("read: %d %s %s\n", r, strerror(errno), buf);
     }
     close(fd);
 }
