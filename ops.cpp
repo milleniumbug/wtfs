@@ -1,6 +1,7 @@
 #include "common.hpp"
 
 #include "structure.hpp"
+#include "ops.hpp"
 
 int wtfs_getattr(const char* path, struct stat* stbuf)
 {
@@ -55,17 +56,17 @@ int wtfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
 	filler(buf, ".", nullptr, 0);
 	filler(buf, "..", nullptr, 0);
 
-    auto& dir = ind->first;
-    for(auto& x : dir.subdirectories)
+	auto& dir = ind->first;
+	for(auto& x : dir.subdirectories)
 	{
 		const char* rawpath = x.first.c_str();
 		filler(buf, rawpath, nullptr, 0);
 	}
-    for(auto& x : dir.files)
-    {
-        const char* rawpath = x.first.c_str();
-        filler(buf, rawpath, nullptr, 0);
-    }
+	for(auto& x : dir.files)
+	{
+		const char* rawpath = x.first.c_str();
+		filler(buf, rawpath, nullptr, 0);
+	}
 	return 0;
 }
 
@@ -166,28 +167,62 @@ int wtfs_utimens(const char* path, const struct timespec ts[2])
 #endif
 int wtfs_open(const char* path, struct fuse_file_info* fi)
 {
-	int res;
-	res = open(path, fi->flags);
-	if(res == -1)
-		return -errno;
-	close(res);
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto fileopt = resolve_path(path, fs);
+	if(fileopt)
+	{
+		fi->fh = create_file_handle(fileopt->second, fs);
+		// przeszukiwanie obecnie nie jest wspierane
+		fi->nonseekable = true;
+	}
+	else
+		return -ENOENT;
 	return 0;
 }
 
 int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
     struct fuse_file_info* fi)
 {
-	int fd;
-	int res;
-	(void)fi;
-	fd = open(path, O_RDONLY);
-	if(fd == -1)
-		return -errno;
-	res = pread(fd, buf, size, offset);
-	if(res == -1)
-		res = -errno;
-	close(fd);
-	return res;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto& handle = *fs.file_handles[fi->fh];
+	assert(offset == handle.offset_last);
+	auto it = fs.filedata_cache.find(handle.current_filedata);
+	if(it != fs.filedata_cache.end())
+	{
+		const char* source_begin = it->second->data + handle.position;
+		off_t clusters = it->first.second - it->first.first;
+		size_t filedata_size = clusters * block_size - sizeof(wtfs_filedata);
+		const char* source_end =
+		    source_begin + std::min(handle.position + size, filedata_size);
+
+		std::ptrdiff_t s = copy(source_begin, source_end, buf, buf + size);
+		if(s >= 0)
+		{
+			// end of destination data
+			// user buffer too small
+			handle.position += size;
+			handle.offset_last += size;
+			return size; // I did what I could
+		}
+		else if(s < 0)
+		{
+			// end of source data
+			// either EOF or need to copy more from the next block
+			size_t copied = std::distance(source_begin, source_end);
+			handle.position += copied;
+			handle.offset_last += copied;
+			return copied;
+		}
+	}
+	else
+	{
+		// fill the cache
+		assert(false && "unimplemented");
+	}
 }
 
 int wtfs_write(const char* path, const char* buf, size_t size, off_t offset,
@@ -217,10 +252,10 @@ int wtfs_statfs(const char* path, struct statvfs* stbuf)
 
 int wtfs_release(const char* path, struct fuse_file_info* fi)
 {
-	/* Just a stub.  This method is optional and can safely be left
-	   unimplemented */
-	(void)path;
-	(void)fi;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	destroy_file_handle(fi->fh, fs);
 	return 0;
 }
 
@@ -316,10 +351,10 @@ void* wtfs_init(fuse_conn_info* conn)
 		}
 	}
 	{
-        directory dir;
-        dir.directory_file = 1;
-        dir.files.emplace("koles", 2);
-        fs->root.subdirectories.emplace("asdf", dir);
+		directory dir;
+		dir.directory_file = 1;
+		dir.files.emplace("koles", 2);
+		fs->root.subdirectories.emplace("asdf", dir);
 	}
 
 	// sample data for a filesystem
@@ -349,13 +384,13 @@ struct fuse_operations wtfs_operations()
 	wtfs_oper.link = wtfs_link;
 	wtfs_oper.chmod = wtfs_chmod;
 	wtfs_oper.chown = wtfs_chown;
-	wtfs_oper.truncate = wtfs_truncate;
+	wtfs_oper.truncate = wtfs_truncate;*/
 	wtfs_oper.open = wtfs_open;
-	wtfs_oper.read = wtfs_read;
-	wtfs_oper.write = wtfs_write;
-	wtfs_oper.statfs = wtfs_statfs;
-	wtfs_oper.release = wtfs_release;
-	wtfs_oper.fsync = wtfs_fsync;
-	wtfs_oper.flag_nullpath_ok = 0;*/
+	wtfs_oper.read = wtfs_read;       /*
+	       wtfs_oper.write = wtfs_write;
+	       wtfs_oper.statfs = wtfs_statfs;*/
+	wtfs_oper.release = wtfs_release; /*
+	 wtfs_oper.fsync = wtfs_fsync;
+	 wtfs_oper.flag_nullpath_ok = 0;*/
 	return wtfs_oper;
 }

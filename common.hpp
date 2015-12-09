@@ -4,6 +4,7 @@
 #include <map>
 #include <iostream>
 #include <memory>
+#include <algorithm>
 #include <experimental/string_view>
 #include <cassert>
 #include <cstdio>

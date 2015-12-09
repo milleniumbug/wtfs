@@ -56,6 +56,13 @@ struct wtfs_filedata
 	char data[];
 };
 
+struct wtfs_file_handle
+{
+	std::pair<off_t, off_t> current_filedata;
+	size_t position;
+	off_t offset_last;
+};
+
 struct directory
 {
 	directory* parent;
@@ -72,6 +79,19 @@ struct wtfs
 	std::map<std::pair<off_t, off_t>,
 	    std::unique_ptr<wtfs_filedata, free_deleter>> filedata_cache;
 	directory root;
+	std::map<uint64_t, std::unique_ptr<wtfs_file_handle>> file_handles;
+
+	struct wtfs_allocator
+	{
+		off_t file;
+		off_t filedata;
+	} allocator;
 };
 
-boost::optional<std::pair<directory&, size_t>> resolve_path(const char* rawpath, wtfs& fs);
+boost::optional<std::pair<directory&, size_t>> resolve_path(
+    const char* rawpath, wtfs& fs);
+
+size_t allocate_file(wtfs& fs);
+uint64_t create_file_handle(size_t fileindex, wtfs& fs);
+void destroy_file_handle(uint64_t file_handle, wtfs& fs);
+void deallocate_file(size_t fh, wtfs& fs);
