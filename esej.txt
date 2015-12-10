@@ -14,7 +14,7 @@ https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201001/
 Nieoficjalny opis FUSE na stronie IBM
 http://www.ibm.com/developerworks/linux/library/l-fuse/
 
-Strona projektu na GitHubie:
+Strona tego projektu na GitHubie:
 https://github.com/milleniumbug/wtfs
 
 Wstęp
@@ -24,7 +24,7 @@ Tradycyjnie systemy plików działają się na poziomie jądra systemu (kernel s
 W przypadku Linuksa wprowadza to sporo ograniczeń:
 
 - kod musi być pisany w C (w teorii niekoniecznie, w praktyce używając czegokolwiek innego walczysz z całym światem i robisz sobie pod górkę)
-- wewnętrzne API nie jest stabilne między wersjami, co narzuca dodatkowy koszt na maintenance
+- wewnętrzne API nie jest stabilne między wersjami, co narzuca dodatkowy koszt na utrzymanie.
 - bug w systemie plików może spowodować niestabilność całego systemu, a nawet zagrożenie bezpieczeństwa.
 
 FUSE umożliwia tworzenie systemów plików na poziomie użytkownika (user space).
@@ -61,7 +61,7 @@ Pojedynczy wpis w tablicy partycji posiada następujące pola:
 Wypełnianie większości tych wpisów nie jest moją odpowiedzialnością jako twórca systemu plików (ewentualnie mogą mi się przydać do odczytu), za wyjątkiem typu partycji.
 Tutaj jako system plików musimy nadać jakąś sensowną wartość polu "typ partycji". Na przykład NTFS ma zarezerwowany numer 07h, zaś FAT32 0Bh.
 Niestety większość wpisów jest zarezerwowana, ponadto nie ma żadnej organizacji która przydziela te numery, co oznacza że większość numerów się nakłada - tak na przykład NTFS i exFAT mają ten sam numer 07h, co oznacza że te numery i tak się będą powtarzać i sprawdzenie numeru nie jest pewnym sposobem na sprawdzenie rodzaju partycji.
-Wikipedia wspomina o istnieniu Alternative OS Development Partition Standard, które rzekomo ma zalecać typ 7Fh, lecz źródła prowadzą do strony błędu 404. Niemniej jednak dwie listy typów partycji które sprawdziłem (http://www.osdever.net/documents/partitiontypes.php, https://www.win.tue.nl/~aeb/partitions/partition_types-1.html) wspominają o tym typie że jest nie używany, co utwierdza mnie w przekonaniu że jest to dobry wybór na typ partycji systemowej.
+Wikipedia wspomina o istnieniu Alternative OS Development Partition Standard, które rzekomo ma zalecać typ 7Fh, lecz źródła prowadzą do strony błędu 404. Niemniej jednak dwie listy typów partycji które sprawdziłem (http://www.osdever.net/documents/partitiontypes.php, https://www.win.tue.nl/~aeb/partitions/partition_types-1.html) wspominają o tym typie że jest nie używany, co utwierdza mnie w przekonaniu że jest to dobry wybór na typ partycji.
 
 GPT
 ---
@@ -78,10 +78,11 @@ Pojedynczy wpis w tablicy partycji GPT zawiera następujące pola:
 Tutaj, podobnie jak w przypadku MBR musimy wypełnić pole "typ partycji". Jest pewne ulepszenie, gdyż mamy tutaj do dyspozycji 16 bajtów, a nie 1. 16 bajtów jest wystarczająco żeby to wystarczająco dużo żeby wygenerować unikalny identyfikator dla każdego atomu we wszechświecie, co oznacza że prawdopodobieństwo kolizji jest znikome. I tym samym wygenerowałem dla nowego systemu plików GUID: `{8b0934c2-9df4-11e5-a644-080027d32d84}`.
 Atrybuty są nowe dla GPT, jest to maska bitowa o długości 8 bajtów, ich opis dla poszczególnych bitów:
 
-0 - czy jest to partycja systemowa
+0 - czy jest to partycja systemowa (tak na przykład oznaczona jest stumegabajtowa partycja "Zarezerwowane dla systemu", którą Windows tworzy)
 1 - czy firmware EFI ma ignorować zawartość tej partycji i z niej nie czytać
+2 - odpowiednik flagi bootowania z BIOS (w ramach kompatybilności)
 3 do 47 - zarezerwowane przez EFI do przyszłego użycia
-48 do 63 - do użytku wewnętrznego dla każdego typu partycji
+48 do 63 - do użytku wewnętrznego, specyficzne dla danego typu partycji
 
 Dostęp do partycji z poziomu zwykłego programu w userspace
 ----------------------------------------------------------
@@ -136,3 +137,18 @@ Jednym z zadań systemu plików jest przydzielanie wolnych bloków. Do tego potr
 
 Do tego celu można wykorzystać istniejące metody przydzielania pamięci - albo z użyciem listy wolnych bloków, albo za pomocą 'buddy system'.
 
+Struktura systemu plików
+------------------------
+
+W większości nowych systemów plików można wyróżnić następujące elementy:
+
+- metadane dla partycji (BPB, EBPB)
+- metadane dla plików (File Allocation Table w FAT32, MFT w NTFS, tablica i-węzłów w ext4)
+- dane plików
+
+W zależności od systemu plików możemy dojść do różnic co jest określane jako plik - w FAT plik posiada nazwę, w rodzinie systemów plików ext nazwa jest zapisywana jako dane katalogu i odnosi się do konkretnego i-węzła. Ilość nazw jest zliczana wewnątrz i-węzła. W swoim systemie plików stosuję podejście jakie stosuje ext - nazwy są zapisywane wewnątrz katalogów.
+
+Co realizować
+-------------
+
+Odczyt katalogów i plików struktur w pamięci jest wykonany - konieczna jest możliwość odczytu z dysku. System później można rozszerzyć najpierw o zapis do plików, później o tworzenie nowych plików.
