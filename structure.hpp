@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ops.hpp"
+
 struct munmap_deleter
 {
 	size_t length;
@@ -23,6 +25,13 @@ struct free_deleter
 
 constexpr size_t block_size = 4096;
 
+enum class cache_state
+{
+	clean,
+	dirty,
+	empty
+};
+
 struct wtfs_bpb
 {
 	char jmp_instruction[3];
@@ -33,6 +42,8 @@ struct wtfs_bpb
 	char padding[block_size - 24];
 };
 static_assert(sizeof(wtfs_bpb) == block_size, "sizeof incorrect");
+static_assert(
+    std::is_trivially_copyable<wtfs_bpb>::value, "must be trivially copyable");
 
 struct wtfs_file
 {
@@ -48,6 +59,8 @@ struct wtfs_file
 	char data[block_size - 65];
 };
 static_assert(sizeof(wtfs_file) == block_size, "sizeof incorrect");
+static_assert(
+    std::is_trivially_copyable<wtfs_file>::value, "must be trivially copyable");
 
 struct wtfs_filedata
 {
@@ -63,23 +76,61 @@ struct wtfs_file_handle
 	off_t offset_last;
 };
 
+struct wtfs;
+
+class file_content_iterator
+    : public boost::iterator_facade<file_content_iterator, char,
+          boost::single_pass_traversal_tag>
+{
+	public:
+	file_content_iterator();
+	file_content_iterator(wtfs_file& file, wtfs& fs);
+	off_t size();
+
+	private:
+	char* pos;
+	char* end;
+	wtfs_filedata* filedata;
+	wtfs* fs;
+	off_t* size_;
+
+	friend class boost::iterator_core_access;
+
+	void next_filedata(std::pair<off_t, off_t> nextptr);
+	void increment();
+	bool equal(const file_content_iterator& other) const;
+	char& dereference() const;
+};
+
 struct directory
 {
 	directory* parent;
 	size_t directory_file;
+	cache_state cached;
+	wtfs* filesystem;
 	// using boost containers because they can be used with incomplete types
-	boost::container::map<std::string, directory> subdirectories;
-	boost::container::map<std::string, size_t> files;
+	boost::container::map<std::string, directory>& subdirectories();
+	boost::container::map<std::string, size_t>& files();
+
+	boost::container::map<std::string, directory> subdirectories_;
+	boost::container::map<std::string, size_t> files_;
+
+	void fill_cache();
+	void dump_cache();
 };
 
 struct wtfs
 {
+	unique_fd filesystem_fd;
 	std::unique_ptr<wtfs_bpb> bpb;
 	std::unique_ptr<wtfs_file[]> files;
 	std::map<std::pair<off_t, off_t>,
 	    std::unique_ptr<wtfs_filedata, free_deleter>> filedata_cache;
 	directory root;
 	std::map<uint64_t, std::unique_ptr<wtfs_file_handle>> file_handles;
+	std::map<uint64_t, std::unique_ptr<file_content_iterator>> file_handles_new;
+
+	wtfs_filedata* load_filedata(std::pair<off_t, off_t> key);
 
 	struct wtfs_allocator
 	{

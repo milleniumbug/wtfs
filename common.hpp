@@ -5,6 +5,11 @@
 #include <iostream>
 #include <memory>
 #include <algorithm>
+#include <vector>
+#include <stack>
+#include <queue>
+#include <tuple>
+#include <type_traits>
 #include <experimental/string_view>
 #include <cassert>
 #include <cstdio>
@@ -13,6 +18,7 @@
 #include <cstring>
 #include <boost/container/map.hpp>
 #include <boost/optional.hpp>
+#include <boost/iterator/iterator_facade.hpp>
 #include <boost/tokenizer.hpp>
 #include <unistd.h>
 #include <fcntl.h>

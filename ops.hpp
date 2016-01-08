@@ -27,3 +27,36 @@ void arif(T value, FN negative, F0 zero, FP positive)
 	}
 	zero();
 }
+
+class unique_fd
+{
+	private:
+	int fd_;
+
+	public:
+	unique_fd(int fd = -1) : fd_(fd) {}
+	unique_fd(unique_fd&& other)
+	{
+		fd_ = other.fd_;
+		other.fd_ = -1;
+	}
+
+	unique_fd& operator=(unique_fd other)
+	{
+		std::swap(fd_, other.fd_);
+		return *this;
+	}
+
+	~unique_fd() { reset(); }
+	unique_fd(const unique_fd& other) = delete;
+
+	explicit operator bool() { return fd_ != -1; }
+	int get() { return fd_; }
+	void reset() { reset(-1); }
+	void reset(int fd)
+	{
+		if(fd_ != -1)
+			close(fd_);
+		fd_ = fd;
+	}
+};
