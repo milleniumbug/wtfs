@@ -116,7 +116,7 @@ void file_content_iterator::next_filedata(std::pair<off_t, off_t> range)
 {
 	filedata = fs->load_filedata(range);
 	pos = filedata->data;
-	off_t clusters = range.second - range.first;
+	off_t clusters = range.second - range.first + 1;
 	size_t filedata_size = clusters * block_size - sizeof(wtfs_filedata);
 	end = pos + filedata_size;
 }
