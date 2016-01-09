@@ -127,7 +127,6 @@ struct wtfs
 	std::map<std::pair<off_t, off_t>,
 	    std::unique_ptr<wtfs_filedata, free_deleter>> filedata_cache;
 	directory root;
-	std::map<uint64_t, std::unique_ptr<wtfs_file_handle>> file_handles;
 	std::map<uint64_t, std::unique_ptr<file_content_iterator>> file_handles_new;
 
 	wtfs_filedata* load_filedata(std::pair<off_t, off_t> key);

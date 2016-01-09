@@ -196,51 +196,6 @@ int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
 	return s;
 }
 
-int wtfs_readold(const char* path, char* buf, size_t size, off_t offset,
-    struct fuse_file_info* fi)
-{
-	struct fuse_context* ctx = fuse_get_context();
-	auto& fs = *static_cast<wtfs*>(ctx->private_data);
-
-	auto& handle = *fs.file_handles[fi->fh];
-	size_t copied_all = 0;
-	assert(offset == handle.offset_last);
-	bool finished = false;
-	while(!finished)
-	{
-		auto it = fs.filedata_cache.find(handle.current_filedata);
-		if(it != fs.filedata_cache.end())
-		{
-			auto& range = it->first;
-			auto& filedata = *it->second;
-			const char* source_begin = filedata.data + handle.position;
-			off_t clusters = range.second - range.first;
-			size_t filedata_size =
-			    clusters * block_size - sizeof(wtfs_filedata);
-			const char* source_end =
-			    source_begin + std::min(handle.position + size, filedata_size);
-
-			std::ptrdiff_t s = copy(source_begin, source_end, buf, buf + size);
-			size_t copied = std::distance(source_begin, source_end);
-			copied_all += copied;
-			size -= copied;
-			handle.position += copied;
-			handle.offset_last += copied;
-			if(s < 0)
-			{
-				// end of source data
-				// either EOF or need to copy more from the next block
-				return copied_all;
-			}
-		}
-		else
-		{
-			// fill the cache
-			assert(false && "unimplemented");
-		}
-	}
-}
-
 int wtfs_write(const char* path, const char* buf, size_t size, off_t offset,
     struct fuse_file_info* fi)
 {

@@ -43,23 +43,15 @@ size_t allocate_file(wtfs& fs)
 uint64_t create_file_handle(size_t fileindex, wtfs& fs)
 {
 	auto& file = fs.files[fileindex];
-	auto start_range =
-	    std::make_pair(file.first_filedata_begin, file.first_filedata_end);
 	auto fhn = std::make_unique<file_content_iterator>(file, fs);
-	auto fh = std::make_unique<wtfs_file_handle>();
-	fh->current_filedata = start_range;
-	fh->position = 0;
-	fh->offset_last = 0;
 	static_assert(sizeof(uint64_t) >= sizeof(uintptr_t), "");
 	auto file_identifier = reinterpret_cast<uint64_t>(fhn.get());
-	fs.file_handles.emplace(file_identifier, std::move(fh));
 	fs.file_handles_new.emplace(file_identifier, std::move(fhn));
 	return file_identifier;
 }
 
 void destroy_file_handle(uint64_t file_handle, wtfs& fs)
 {
-	fs.file_handles.erase(file_handle);
 	fs.file_handles_new.erase(file_handle);
 }
 
