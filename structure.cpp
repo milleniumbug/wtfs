@@ -1,16 +1,21 @@
 #include "common.hpp"
 #include "structure.hpp"
 
-boost::optional<std::pair<directory&, size_t>> resolve_path(
-    const char* rawpath, wtfs& fs)
+std::vector<std::string> path_from_rawpath(const char* rawpath)
 {
 	std::string path = rawpath;
 	boost::char_separator<char> sep("/");
 	boost::tokenizer<decltype(sep)> tokens(path, sep);
+	return std::vector<std::string>(tokens.begin(), tokens.end());
+}
 
+boost::optional<std::pair<directory&, size_t>> resolve_path(
+    const char* rawpath, wtfs& fs)
+{
 	directory* current = &fs.root;
 	ssize_t fd = 0;
 	bool end = false;
+	auto tokens = path_from_rawpath(rawpath);
 	for(auto& part : tokens)
 	{
 		if(end)
@@ -40,19 +45,19 @@ size_t allocate_file(wtfs& fs)
 	return fs.allocator.file++;
 }
 
-uint64_t create_file_handle(size_t fileindex, wtfs& fs)
+uint64_t create_file_description(size_t fileindex, wtfs& fs)
 {
 	auto& file = fs.files[fileindex];
 	auto fhn = std::make_unique<file_content_iterator>(file, fs);
 	static_assert(sizeof(uint64_t) >= sizeof(uintptr_t), "");
 	auto file_identifier = reinterpret_cast<uint64_t>(fhn.get());
-	fs.file_handles_new.emplace(file_identifier, std::move(fhn));
+	fs.file_descriptions.emplace(file_identifier, std::move(fhn));
 	return file_identifier;
 }
 
-void destroy_file_handle(uint64_t file_handle, wtfs& fs)
+void destroy_file_description(uint64_t file_description, wtfs& fs)
 {
-	fs.file_handles_new.erase(file_handle);
+	fs.file_descriptions.erase(file_description);
 }
 
 void deallocate_file(size_t fh, wtfs& fs)
@@ -85,7 +90,7 @@ void directory::dump_cache()
 }
 
 file_content_iterator::file_content_iterator()
-    : pos(nullptr), end(nullptr), filedata(nullptr), fs(nullptr)
+    : pos(nullptr), end(nullptr), chunk_(nullptr), fs(nullptr)
 {
 }
 
@@ -93,47 +98,46 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 {
 	this->fs = &fs;
 	this->size_ = &file.size;
-	next_filedata(
-	    std::make_pair(file.first_filedata_begin, file.first_filedata_end));
+	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
-wtfs_filedata* wtfs::load_filedata(std::pair<off_t, off_t> key)
+chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
 {
-	auto it = filedata_cache.find(key);
-	if(it != filedata_cache.end())
+	auto it = chunk_cache.find(key);
+	if(it != chunk_cache.end())
 	{
 		return it->second.get();
 	}
 	else
 	{
-		// load filedata
+		// load chunk
 		assert(false && "unimplemented");
 		return nullptr;
 	}
 }
 
-void file_content_iterator::next_filedata(std::pair<off_t, off_t> range)
+void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 {
-	filedata = fs->load_filedata(range);
-	pos = filedata->data;
+	chunk_ = fs->load_chunk(range);
+	pos = chunk_->data;
 	off_t clusters = range.second - range.first + 1;
-	size_t filedata_size = clusters * block_size - sizeof(wtfs_filedata);
-	end = pos + filedata_size;
+	size_t chunk_size = clusters * block_size - sizeof(chunk_);
+	end = pos + chunk_size;
 }
 
 void file_content_iterator::increment()
 {
 	++pos;
 	if(pos == end)
-		next_filedata(std::make_pair(
-		    filedata->next_filedata_begin, filedata->next_filedata_end));
+		next_chunk(
+		    std::make_pair(chunk_->next_chunk_begin, chunk_->next_chunk_end));
 }
 
 bool file_content_iterator::equal(const file_content_iterator& other) const
 {
 	auto tied = [](const file_content_iterator& it)
 	{
-		return std::tie(it.pos, it.filedata, it.fs);
+		return std::tie(it.pos, it.chunk_, it.fs);
 	};
 	return tied(*this) == tied(other);
 }

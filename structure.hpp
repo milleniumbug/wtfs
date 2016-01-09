@@ -48,10 +48,10 @@ static_assert(
 struct wtfs_file
 {
 	off_t size;
-	off_t first_filedata_begin;
-	off_t first_filedata_end;
-	off_t last_filedata_begin;
-	off_t last_filedata_end;
+	off_t first_chunk_begin;
+	off_t first_chunk_end;
+	off_t last_chunk_begin;
+	off_t last_chunk_end;
 	mode_t mode;
 	nlink_t hardlink_count;
 	uid_t user;
@@ -62,16 +62,16 @@ static_assert(sizeof(wtfs_file) == block_size, "sizeof incorrect");
 static_assert(
     std::is_trivially_copyable<wtfs_file>::value, "must be trivially copyable");
 
-struct wtfs_filedata
+struct chunk
 {
-	off_t next_filedata_begin;
-	off_t next_filedata_end;
+	off_t next_chunk_begin;
+	off_t next_chunk_end;
 	char data[];
 };
 
-struct wtfs_file_handle
+struct file_description
 {
-	std::pair<off_t, off_t> current_filedata;
+	std::pair<off_t, off_t> current_chunk;
 	size_t position;
 	off_t offset_last;
 };
@@ -90,13 +90,13 @@ class file_content_iterator
 	private:
 	char* pos;
 	char* end;
-	wtfs_filedata* filedata;
+	chunk* chunk_;
 	wtfs* fs;
 	off_t* size_;
 
 	friend class boost::iterator_core_access;
 
-	void next_filedata(std::pair<off_t, off_t> nextptr);
+	void next_chunk(std::pair<off_t, off_t> nextptr);
 	void increment();
 	bool equal(const file_content_iterator& other) const;
 	char& dereference() const;
@@ -124,24 +124,26 @@ struct wtfs
 	unique_fd filesystem_fd;
 	std::unique_ptr<wtfs_bpb> bpb;
 	std::unique_ptr<wtfs_file[]> files;
-	std::map<std::pair<off_t, off_t>,
-	    std::unique_ptr<wtfs_filedata, free_deleter>> filedata_cache;
+	std::map<std::pair<off_t, off_t>, std::unique_ptr<chunk, free_deleter>>
+	    chunk_cache;
 	directory root;
-	std::map<uint64_t, std::unique_ptr<file_content_iterator>> file_handles_new;
+	std::map<uint64_t, std::unique_ptr<file_content_iterator>>
+	    file_descriptions;
 
-	wtfs_filedata* load_filedata(std::pair<off_t, off_t> key);
+	chunk* load_chunk(std::pair<off_t, off_t> key);
 
 	struct wtfs_allocator
 	{
 		off_t file;
-		off_t filedata;
+		off_t chunk;
 	} allocator;
 };
 
 boost::optional<std::pair<directory&, size_t>> resolve_path(
     const char* rawpath, wtfs& fs);
+std::vector<std::string> path_from_rawpath(const char* rawpath);
 
 size_t allocate_file(wtfs& fs);
-uint64_t create_file_handle(size_t fileindex, wtfs& fs);
-void destroy_file_handle(uint64_t file_handle, wtfs& fs);
+uint64_t create_file_description(size_t fileindex, wtfs& fs);
+void destroy_file_description(uint64_t file_description, wtfs& fs);
 void deallocate_file(size_t fh, wtfs& fs);

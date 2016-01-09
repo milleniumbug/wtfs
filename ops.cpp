@@ -70,10 +70,33 @@ int wtfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
 	return 0;
 }
 
-int wtfs_mknod(const char* path, mode_t mode, dev_t rdev)
+int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 {
-	std::cout << "mknod - not implemented\n";
-	return 0;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto ind = resolve(rawpath, fs);
+	if(ind && ind->first.directory_file == ind->second)
+	{
+		size_t allocated_file_index = allocate_file(fs);
+		auto& file = fs.files[allocated_file_index];
+		file.size = 0;
+		file.first_chunk_begin;
+		file.first_chunk_end;
+		file.last_chunk_begin;
+		file.last_chunk_end;
+		file.mode = mode;
+		file.hardlink_count = 1;
+		file.user;
+		file.group;
+		auto last_component = path_from_rawpath(rawpath).back();
+		ind->first.files_.emplace(last_component, allocated_file_index);
+		return 0;
+	}
+	else
+	{
+		return -ENOENT;
+	}
 }
 
 int wtfs_mkdir(const char* path, mode_t mode)
@@ -173,7 +196,7 @@ int wtfs_open(const char* path, struct fuse_file_info* fi)
 	auto fileopt = resolve_path(path, fs);
 	if(fileopt)
 	{
-		fi->fh = create_file_handle(fileopt->second, fs);
+		fi->fh = create_file_description(fileopt->second, fs);
 		// przeszukiwanie obecnie nie jest wspierane
 		fi->nonseekable = true;
 	}
@@ -188,7 +211,7 @@ int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
 	struct fuse_context* ctx = fuse_get_context();
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
-	auto& it = *fs.file_handles_new[fi->fh];
+	auto& it = *fs.file_descriptions[fi->fh];
 	size_t copied_all = 0;
 
 	auto s = std::min(static_cast<size_t>(it.size() - offset), size);
@@ -215,7 +238,7 @@ int wtfs_release(const char* path, struct fuse_file_info* fi)
 	struct fuse_context* ctx = fuse_get_context();
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
-	destroy_file_handle(fi->fh, fs);
+	destroy_file_description(fi->fh, fs);
 	return 0;
 }
 
@@ -233,14 +256,14 @@ void* wtfs_init(fuse_conn_info* conn)
 {
 	auto fs = std::make_unique<wtfs>();
 	fs->bpb = std::make_unique<wtfs_bpb>();
-	fs->files = std::make_unique<wtfs_file[]>(4);
+	fs->files = std::make_unique<wtfs_file[]>(10);
 	{
 		auto& f = fs->files[0];
 		f.size = 4000;
-		f.first_filedata_begin = 13;
-		f.first_filedata_end = 13;
-		f.last_filedata_begin = 13;
-		f.last_filedata_end = 13;
+		f.first_chunk_begin = 13;
+		f.first_chunk_end = 13;
+		f.last_chunk_begin = 13;
+		f.last_chunk_end = 13;
 		f.mode = S_IFDIR | 0555;
 		f.hardlink_count = 1;
 		f.user = 0;
@@ -249,10 +272,10 @@ void* wtfs_init(fuse_conn_info* conn)
 	{
 		auto& f = fs->files[1];
 		f.size = 5000;
-		f.first_filedata_begin = 10;
-		f.first_filedata_end = 11;
-		f.last_filedata_begin = 10;
-		f.last_filedata_end = 11;
+		f.first_chunk_begin = 10;
+		f.first_chunk_end = 11;
+		f.last_chunk_begin = 10;
+		f.last_chunk_end = 11;
 		f.mode = S_IFDIR | 0666;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -261,10 +284,10 @@ void* wtfs_init(fuse_conn_info* conn)
 	{
 		auto& f = fs->files[2];
 		f.size = 5;
-		f.first_filedata_begin = 14;
-		f.first_filedata_end = 14;
-		f.last_filedata_begin = 14;
-		f.last_filedata_end = 14;
+		f.first_chunk_begin = 14;
+		f.first_chunk_end = 14;
+		f.last_chunk_begin = 14;
+		f.last_chunk_end = 14;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -273,78 +296,77 @@ void* wtfs_init(fuse_conn_info* conn)
 	{
 		auto& f = fs->files[3];
 		f.size = 7000;
-		f.first_filedata_begin = 16;
-		f.first_filedata_end = 16;
-		f.last_filedata_begin = 17;
-		f.last_filedata_end = 17;
+		f.first_chunk_begin = 16;
+		f.first_chunk_end = 16;
+		f.last_chunk_begin = 17;
+		f.last_chunk_end = 17;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
 		f.group = 1000;
 	}
 	{
-		decltype(fs->filedata_cache)::iterator it;
+		decltype(fs->chunk_cache)::iterator it;
 		bool inserted;
 		{
-			std::tie(it, inserted) = fs->filedata_cache.emplace(
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(10, 11),
-			    std::unique_ptr<wtfs_filedata, free_deleter>(
-			        static_cast<wtfs_filedata*>(malloc(block_size * 2))));
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size * 2))));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size * 2);
 			memset(block.data, 'a', 5000);
-			block.next_filedata_begin = 0;
-			block.next_filedata_end = 0;
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->filedata_cache.emplace(
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(13, 13),
-			    std::unique_ptr<wtfs_filedata, free_deleter>(
-			        static_cast<wtfs_filedata*>(malloc(block_size))));
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size))));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
 			memset(block.data, 'a', 4000);
-			block.next_filedata_begin = 0;
-			block.next_filedata_end = 0;
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->filedata_cache.emplace(
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(14, 14),
-			    std::unique_ptr<wtfs_filedata, free_deleter>(
-			        static_cast<wtfs_filedata*>(malloc(block_size))));
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size))));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
 			memset(block.data, 'a', 5);
-			block.next_filedata_begin = 0;
-			block.next_filedata_end = 0;
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->filedata_cache.emplace(
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(16, 16),
-			    std::unique_ptr<wtfs_filedata, free_deleter>(
-			        static_cast<wtfs_filedata*>(malloc(block_size))));
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size))));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
-			memset(block.data, 'b', block_size - sizeof(wtfs_filedata));
-			block.next_filedata_begin = 17;
-			block.next_filedata_end = 17;
+			memset(block.data, 'b', block_size - sizeof(chunk));
+			block.next_chunk_begin = 17;
+			block.next_chunk_end = 17;
 		}
 		{
-			std::tie(it, inserted) = fs->filedata_cache.emplace(
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(17, 17),
-			    std::unique_ptr<wtfs_filedata, free_deleter>(
-			        static_cast<wtfs_filedata*>(malloc(block_size))));
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size))));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
-			memset(
-			    block.data, 'c', 7000 - (block_size - sizeof(wtfs_filedata)));
-			block.next_filedata_begin = 0;
-			block.next_filedata_end = 0;
+			memset(block.data, 'c', 7000 - (block_size - sizeof(chunk)));
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 		}
 	}
 	{
@@ -373,8 +395,8 @@ struct fuse_operations wtfs_operations()
 	/*wtfs_oper.access = wtfs_access;
 	wtfs_oper.readlink = wtfs_readlink;*/
 	wtfs_oper.readdir = wtfs_readdir;
-	/*wtfs_oper.mknod = wtfs_mknod;
-	wtfs_oper.mkdir = wtfs_mkdir;
+	wtfs_oper.mknod = wtfs_mknod;
+	/*wtfs_oper.mkdir = wtfs_mkdir;
 	wtfs_oper.symlink = wtfs_symlink;
 	wtfs_oper.unlink = wtfs_unlink;
 	wtfs_oper.rmdir = wtfs_rmdir;
