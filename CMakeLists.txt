@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.3)
 project(OS_Projekt_WTFS)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -Wall -Wextra -Wno-unused-parameter")
 
 set(SOURCE_FILES
     common.hpp
@@ -9,7 +9,9 @@ set(SOURCE_FILES
     ops.cpp
     ops.hpp
     structure.cpp
-    structure.hpp)
+    structure.hpp
+    tests.cpp
+    tests.hpp)
 
 add_executable(OS_Projekt_WTFS ${SOURCE_FILES})
 

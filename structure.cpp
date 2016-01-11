@@ -20,15 +20,13 @@ boost::optional<std::pair<directory&, size_t>> resolve_path(
 	{
 		if(end)
 			return boost::none;
-		auto dirit = current->subdirectories().find(part);
-		if(dirit != current->subdirectories().end())
+		if(auto dirit = at(current->subdirectories(), part))
 		{
 			current = &dirit->second;
 			fd = current->directory_file;
 			continue;
 		}
-		auto fileit = current->files().find(part);
-		if(fileit != current->files().end())
+		if(auto fileit = at(current->files(), part))
 		{
 			end = true;
 			fd = fileit->second;
@@ -37,6 +35,57 @@ boost::optional<std::pair<directory&, size_t>> resolve_path(
 			return boost::none;
 	}
 	return std::pair<directory&, size_t>(*current, fd);
+}
+
+resolve_result resolve_dirs(const char* rawpath, wtfs& fs)
+{
+	directory* current = &fs.root;
+	bool end = false;
+	auto tokens = path_from_rawpath(rawpath);
+	resolve_result retval;
+	retval.parents.reserve(tokens.size());
+	retval.parents.emplace_back("root", current);
+	retval.successfully_resolved = 1;
+	retval.failed_to_resolve = 0;
+	for(auto& part : tokens)
+	{
+		if(end)
+		{
+			++retval.failed_to_resolve;
+			if(retval.base)
+			{
+				--retval.successfully_resolved;
+				++retval.failed_to_resolve;
+				retval.base = boost::none;
+			}
+		}
+		else if(auto dirit = at(current->subdirectories(), part))
+		{
+			current = &dirit->second;
+			auto d = std::make_pair(part, current);
+			retval.base = d;
+			retval.parents.push_back(d);
+			++retval.successfully_resolved;
+		}
+		else if(auto fileit = at(current->files(), part))
+		{
+			end = true;
+			retval.base = std::make_pair(part, fileit->second);
+			++retval.successfully_resolved;
+		}
+		else
+		{
+			end = true;
+			++retval.failed_to_resolve;
+			retval.base = boost::none;
+		}
+	}
+	if(retval.base &&
+	    boost::polymorphic_strict_get<directory*>(&retval.base->second))
+	{
+		retval.parents.pop_back();
+	}
+	return retval;
 }
 
 size_t allocate_file(wtfs& fs)
@@ -63,6 +112,46 @@ void destroy_file_description(uint64_t file_description, wtfs& fs)
 void deallocate_file(size_t fh, wtfs& fs)
 {
 	// TODO: a serious implementation
+}
+
+std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs)
+{
+	// TODO: a serious implementation
+	off_t left = fs.allocator.chunk;
+	off_t right = left + length - 1;
+	fs.allocator.chunk += length;
+	std::pair<off_t, off_t> allocated_chunk = std::make_pair(left, right);
+	decltype(fs.chunk_cache)::iterator it;
+	bool inserted;
+	std::tie(it, inserted) = fs.chunk_cache.emplace(
+	    allocated_chunk, std::unique_ptr<chunk, free_deleter>(
+	                         static_cast<chunk*>(malloc(block_size * length))));
+	auto& block = *it->second;
+	memset(&block, 0xCC, block_size * length);
+	block.next_chunk_begin = 0;
+	block.next_chunk_end = 0;
+	assert(inserted);
+	return allocated_chunk;
+}
+
+void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs)
+{
+	// TODO: a serious implementation
+}
+
+chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
+{
+	auto it = chunk_cache.find(key);
+	if(it != chunk_cache.end())
+	{
+		return it->second.get();
+	}
+	else
+	{
+		// load chunk
+		assert(false && "unimplemented");
+		return nullptr;
+	}
 }
 
 boost::container::map<std::string, directory>& directory::subdirectories()
@@ -101,27 +190,12 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
-chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
-{
-	auto it = chunk_cache.find(key);
-	if(it != chunk_cache.end())
-	{
-		return it->second.get();
-	}
-	else
-	{
-		// load chunk
-		assert(false && "unimplemented");
-		return nullptr;
-	}
-}
-
 void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 {
 	chunk_ = fs->load_chunk(range);
 	pos = chunk_->data;
 	off_t clusters = range.second - range.first + 1;
-	size_t chunk_size = clusters * block_size - sizeof(chunk_);
+	size_t chunk_size = clusters * block_size - sizeof(chunk);
 	end = pos + chunk_size;
 }
 
@@ -144,7 +218,8 @@ bool file_content_iterator::equal(const file_content_iterator& other) const
 
 char& file_content_iterator::dereference() const
 {
-	return *pos;
+	char& c = *pos;
+	return c;
 }
 
 off_t file_content_iterator::size()

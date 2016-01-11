@@ -60,3 +60,23 @@ class unique_fd
 		fd_ = fd;
 	}
 };
+
+template <typename Map, typename Key>
+boost::optional<typename Map::reference> at(Map& map, Key&& key)
+{
+	auto it = map.find(std::forward<Key>(key));
+	if(it != map.end())
+		return *it;
+	else
+		return boost::none;
+}
+
+template <typename Map, typename Key>
+boost::optional<typename Map::const_reference> at(const Map& map, Key&& key)
+{
+	auto it = map.find(std::forward<Key>(key));
+	if(it != map.end())
+		return *it;
+	else
+		return boost::none;
+}

@@ -20,6 +20,8 @@
 #include <boost/optional.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/tokenizer.hpp>
+#include <boost/variant.hpp>
+#include <boost/variant/polymorphic_get.hpp>
 #include <unistd.h>
 #include <fcntl.h>
 #include <endian.h>

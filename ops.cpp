@@ -2,6 +2,7 @@
 
 #include "structure.hpp"
 #include "ops.hpp"
+#include "tests.hpp"
 
 int wtfs_getattr(const char* path, struct stat* stbuf)
 {
@@ -75,22 +76,28 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 	struct fuse_context* ctx = fuse_get_context();
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
-	auto ind = resolve(rawpath, fs);
-	if(ind && ind->first.directory_file == ind->second)
+	auto resolv = resolve_dirs(rawpath, fs);
+	if(resolv.failed_to_resolve == 0)
+		return -EEXIST;
+	if(resolv.failed_to_resolve == 1 && !resolv.base)
 	{
 		size_t allocated_file_index = allocate_file(fs);
+		auto chunk = allocate_chunk(1, fs);
 		auto& file = fs.files[allocated_file_index];
 		file.size = 0;
-		file.first_chunk_begin;
-		file.first_chunk_end;
-		file.last_chunk_begin;
-		file.last_chunk_end;
+		file.first_chunk_begin = chunk.first;
+		file.first_chunk_end = chunk.second;
+		file.last_chunk_begin = chunk.first;
+		file.last_chunk_end = chunk.second;
 		file.mode = mode;
 		file.hardlink_count = 1;
-		file.user;
-		file.group;
+		// TODO: is this correct?
+		file.user = ctx->uid;
+		file.group = ctx->gid;
 		auto last_component = path_from_rawpath(rawpath).back();
-		ind->first.files_.emplace(last_component, allocated_file_index);
+		auto& direct_parent = resolv.parents.back();
+		direct_parent.second->files().emplace(
+		    last_component, allocated_file_index);
 		return 0;
 	}
 	else
@@ -132,13 +139,36 @@ int wtfs_symlink(const char* from, const char* to)
 	return 0;
 }
 
-int wtfs_rename(const char* from, const char* to)
+int wtfs_rename(const char* rawfrom, const char* rawto)
 {
-	int res;
-	res = rename(from, to);
-	if(res == -1)
-		return -errno;
-	return 0;
+	/*struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto dirs_from = resolve_dirs(rawfrom, fs);
+	auto dirs_to = resolve_dirs(rawto, fs);
+	auto last_component_from = dirs_from.back();
+	auto last_component_to = dirs_to.at(dirs_to.size() - 2);
+	if(parentfrom_opt && parentto_opt)
+	{
+	    auto& parentfrom = parentfrom_opt->first;
+	    auto& parentto = parentto_opt->first;
+	    auto dir = parentfrom.subdirectories().find(last_component_from);
+	    if(dir != parentfrom.subdirectories().end())
+	    {
+	        parentto.subdirectories().emplace(
+	            last_component_to, std::move(dir->second));
+	        parentfrom.subdirectories().erase(dir);
+	    }
+	    auto file = parentfrom.files().find(last_component_from);
+	    if(file != parentfrom.files().end())
+	    {
+	        parentto.files().emplace(
+	            last_component_to, std::move(file->second));
+	        parentfrom.files().erase(file);
+	    }
+	    return 0;
+	}*/
+	return -ENOENT;
 }
 
 int wtfs_link(const char* from, const char* to)
@@ -212,9 +242,8 @@ int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
 	auto& it = *fs.file_descriptions[fi->fh];
-	size_t copied_all = 0;
 
-	auto s = std::min(static_cast<size_t>(it.size() - offset), size);
+	const auto s = std::min(static_cast<size_t>(it.size() - offset), size);
 	std::copy_n(it, s, buf);
 	return s;
 }
@@ -222,6 +251,13 @@ int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
 int wtfs_write(const char* path, const char* buf, size_t size, off_t offset,
     struct fuse_file_info* fi)
 {
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto& it = *fs.file_descriptions[fi->fh];
+	const auto s = std::min(static_cast<size_t>(it.size() - offset), size);
+	std::copy_n(buf, s, it);
+	return s;
 }
 
 int wtfs_statfs(const char* path, struct statvfs* stbuf)
@@ -256,7 +292,7 @@ void* wtfs_init(fuse_conn_info* conn)
 {
 	auto fs = std::make_unique<wtfs>();
 	fs->bpb = std::make_unique<wtfs_bpb>();
-	fs->files = std::make_unique<wtfs_file[]>(10);
+	fs->files = std::make_unique<wtfs_file[]>(15);
 	{
 		auto& f = fs->files[0];
 		f.size = 4000;
@@ -300,6 +336,18 @@ void* wtfs_init(fuse_conn_info* conn)
 		f.first_chunk_end = 16;
 		f.last_chunk_begin = 17;
 		f.last_chunk_end = 17;
+		f.mode = S_IFREG | 0740;
+		f.hardlink_count = 1;
+		f.user = 1000;
+		f.group = 1000;
+	}
+	{
+		auto& f = fs->files[4];
+		f.size = 0;
+		f.first_chunk_begin = 18;
+		f.first_chunk_end = 18;
+		f.last_chunk_begin = 18;
+		f.last_chunk_end = 18;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -368,15 +416,27 @@ void* wtfs_init(fuse_conn_info* conn)
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
+		{
+			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			    std::make_pair(18, 18),
+			    std::unique_ptr<chunk, free_deleter>(
+			        static_cast<chunk*>(malloc(block_size))));
+			assert(inserted);
+			auto& block = *it->second;
+			memset(&block, 'z', block_size);
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
+		}
 	}
 	{
 		directory dir;
 		dir.directory_file = 1;
-		dir.files_.emplace("koles", 2);
-		dir.files_.emplace("ziom", 3);
-		fs->root.subdirectories_.emplace("asdf", dir);
+		dir.files().emplace("koles", 2);
+		dir.files().emplace("ziom", 3);
+		fs->root.subdirectories().emplace("asdf", dir);
+		fs->root.files().emplace("laffo_pusty_plik", 4);
 	}
-
+	run_tests(*fs);
 	// sample data for a filesystem
 	return fs.release();
 }
@@ -399,18 +459,18 @@ struct fuse_operations wtfs_operations()
 	/*wtfs_oper.mkdir = wtfs_mkdir;
 	wtfs_oper.symlink = wtfs_symlink;
 	wtfs_oper.unlink = wtfs_unlink;
-	wtfs_oper.rmdir = wtfs_rmdir;
+	wtfs_oper.rmdir = wtfs_rmdir;*/
 	wtfs_oper.rename = wtfs_rename;
-	wtfs_oper.link = wtfs_link;
+	/*wtfs_oper.link = wtfs_link;
 	wtfs_oper.chmod = wtfs_chmod;
 	wtfs_oper.chown = wtfs_chown;
 	wtfs_oper.truncate = wtfs_truncate;*/
 	wtfs_oper.open = wtfs_open;
-	wtfs_oper.read = wtfs_read;       /*
-	       wtfs_oper.write = wtfs_write;
-	       wtfs_oper.statfs = wtfs_statfs;*/
-	wtfs_oper.release = wtfs_release; /*
-	 wtfs_oper.fsync = wtfs_fsync;
-	 wtfs_oper.flag_nullpath_ok = 0;*/
+	wtfs_oper.read = wtfs_read;
+	wtfs_oper.write = wtfs_write;
+	/*wtfs_oper.statfs = wtfs_statfs;*/
+	wtfs_oper.release = wtfs_release;
+	wtfs_oper.fsync = wtfs_fsync;
+	wtfs_oper.flag_nullpath_ok = 0;
 	return wtfs_oper;
 }

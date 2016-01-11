@@ -69,13 +69,6 @@ struct chunk
 	char data[];
 };
 
-struct file_description
-{
-	std::pair<off_t, off_t> current_chunk;
-	size_t position;
-	off_t offset_last;
-};
-
 struct wtfs;
 
 class file_content_iterator
@@ -104,19 +97,18 @@ class file_content_iterator
 
 struct directory
 {
-	directory* parent;
 	size_t directory_file;
-	cache_state cached;
-	wtfs* filesystem;
+	cache_state cached = cache_state::empty;
 	// using boost containers because they can be used with incomplete types
 	boost::container::map<std::string, directory>& subdirectories();
 	boost::container::map<std::string, size_t>& files();
 
-	boost::container::map<std::string, directory> subdirectories_;
-	boost::container::map<std::string, size_t> files_;
-
 	void fill_cache();
 	void dump_cache();
+
+	private:
+	boost::container::map<std::string, directory> subdirectories_;
+	boost::container::map<std::string, size_t> files_;
 };
 
 struct wtfs
@@ -141,8 +133,21 @@ struct wtfs
 
 boost::optional<std::pair<directory&, size_t>> resolve_path(
     const char* rawpath, wtfs& fs);
+
+struct resolve_result
+{
+	std::vector<std::pair<std::string, directory*>> parents;
+	boost::optional<std::pair<std::string, boost::variant<directory*, size_t>>>
+	    base;
+	size_t successfully_resolved;
+	size_t failed_to_resolve;
+};
+
+resolve_result resolve_dirs(const char* rawpath, wtfs& fs);
 std::vector<std::string> path_from_rawpath(const char* rawpath);
 
+std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs);
+void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs);
 size_t allocate_file(wtfs& fs);
 uint64_t create_file_description(size_t fileindex, wtfs& fs);
 void destroy_file_description(uint64_t file_description, wtfs& fs);
