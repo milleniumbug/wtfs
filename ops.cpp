@@ -27,21 +27,17 @@ int wtfs_getattr(const char* path, struct stat* stbuf)
 
 int wtfs_access(const char* path, int mask)
 {
-	int res;
-	res = access(path, mask);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = access(path, mask);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -42;
 }
 
 int wtfs_readlink(const char* path, char* buf, size_t size)
 {
-	int res;
-	res = readlink(path, buf, size - 1);
-	if(res == -1)
-		return -errno;
-	buf[res] = '\0';
-	return 0;
+	// res = readlink(path, buf, size - 1);
+	// buf[res] = '\0';
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -43;
 }
 
 int wtfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
@@ -109,113 +105,111 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 int wtfs_mkdir(const char* path, mode_t mode)
 {
 	std::cout << "mkdir - not implemented\n";
-	return 0;
+	return -44;
 }
 
 int wtfs_unlink(const char* path)
 {
-	int res;
-	res = unlink(path);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = unlink(path);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -45;
 }
 
 int wtfs_rmdir(const char* path)
 {
-	int res;
-	res = rmdir(path);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = rmdir(path);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -46;
 }
 
 int wtfs_symlink(const char* from, const char* to)
 {
-	int res;
-	res = symlink(from, to);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = symlink(from, to);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -47;
 }
 
 int wtfs_rename(const char* rawfrom, const char* rawto)
 {
-	/*struct fuse_context* ctx = fuse_get_context();
+	struct fuse_context* ctx = fuse_get_context();
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
-	auto dirs_from = resolve_dirs(rawfrom, fs);
-	auto dirs_to = resolve_dirs(rawto, fs);
-	auto last_component_from = dirs_from.back();
-	auto last_component_to = dirs_to.at(dirs_to.size() - 2);
-	if(parentfrom_opt && parentto_opt)
-	{
-	    auto& parentfrom = parentfrom_opt->first;
-	    auto& parentto = parentto_opt->first;
-	    auto dir = parentfrom.subdirectories().find(last_component_from);
-	    if(dir != parentfrom.subdirectories().end())
-	    {
-	        parentto.subdirectories().emplace(
-	            last_component_to, std::move(dir->second));
-	        parentfrom.subdirectories().erase(dir);
-	    }
-	    auto file = parentfrom.files().find(last_component_from);
-	    if(file != parentfrom.files().end())
-	    {
-	        parentto.files().emplace(
-	            last_component_to, std::move(file->second));
-	        parentfrom.files().erase(file);
-	    }
-	    return 0;
-	}*/
-	return -ENOENT;
+	auto resolv_from = resolve_dirs(rawfrom, fs);
+	auto resolv_to = resolve_dirs(rawto, fs);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -47;
 }
 
 int wtfs_link(const char* from, const char* to)
 {
-	int res;
-	res = link(from, to);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = link(from, to);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -48;
 }
 
 int wtfs_chmod(const char* path, mode_t mode)
 {
-	int res;
-	res = chmod(path, mode);
-	if(res == -1)
-		return -errno;
+	// res = chmod(path, mode);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -49;
+}
+
+int wtfs_flush(const char* rawpath, struct fuse_file_info* fi)
+{
+	// TODO: implement
+	std::cerr << "not implemented: " << __func__ << "\n";
 	return 0;
 }
 
 int wtfs_chown(const char* path, uid_t uid, gid_t gid)
 {
-	int res;
-	res = lchown(path, uid, gid);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = lchown(path, uid, gid);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -51;
 }
 
-int wtfs_truncate(const char* path, off_t size)
+int wtfs_truncate(const char* rawpath, const off_t new_size)
 {
-	int res;
-	res = truncate(path, size);
-	if(res == -1)
-		return -errno;
-	return 0;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto resolv = resolve_dirs(rawpath, fs);
+	// TODO: more errors
+	if(resolv.failed_to_resolve > 0)
+		return -ENOENT;
+
+	{
+		auto& file_or_dir = resolv.base->second;
+		auto for_dir = [&](directory* dir)
+		{
+			return -EISDIR;
+		};
+		auto for_file = [&](size_t inode)
+		{
+			auto& file = fs.files[inode];
+			auto old_size = file.size;
+			if(new_size <= old_size)
+			{
+				file.size = new_size;
+				return 0;
+			}
+			else
+			{
+				return -52;
+			}
+		};
+		return boost::apply_visitor(
+		    make_lambda_visitor<int>(for_dir, for_file), file_or_dir);
+	}
 }
 
 #ifdef HAVE_UTIMENSAT
 int wtfs_utimens(const char* path, const struct timespec ts[2])
 {
-	int res;
 	/* don't use utime/utimes since they follow symlinks */
-	res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -53;
 }
 #endif
 int wtfs_open(const char* path, struct fuse_file_info* fi)
@@ -255,18 +249,15 @@ int wtfs_write(const char* path, const char* buf, size_t size, off_t offset,
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
 	auto& it = *fs.file_descriptions[fi->fh];
-	const auto s = std::min(static_cast<size_t>(it.size() - offset), size);
-	std::copy_n(buf, s, it);
-	return s;
+	std::copy_n(buf, size, it);
+	return size;
 }
 
 int wtfs_statfs(const char* path, struct statvfs* stbuf)
 {
-	int res;
-	res = statvfs(path, stbuf);
-	if(res == -1)
-		return -errno;
-	return 0;
+	// res = statvfs(path, stbuf);
+	std::cerr << "not implemented: " << __func__ << "\n";
+	return -54;
 }
 
 int wtfs_release(const char* path, struct fuse_file_info* fi)
@@ -452,23 +443,24 @@ struct fuse_operations wtfs_operations()
 	wtfs_oper.init = wtfs_init;
 	wtfs_oper.destroy = wtfs_destroy;
 	wtfs_oper.getattr = wtfs_getattr;
-	/*wtfs_oper.access = wtfs_access;
-	wtfs_oper.readlink = wtfs_readlink;*/
+	wtfs_oper.access = wtfs_access;
+	wtfs_oper.readlink = wtfs_readlink;
 	wtfs_oper.readdir = wtfs_readdir;
 	wtfs_oper.mknod = wtfs_mknod;
-	/*wtfs_oper.mkdir = wtfs_mkdir;
+	wtfs_oper.mkdir = wtfs_mkdir;
 	wtfs_oper.symlink = wtfs_symlink;
 	wtfs_oper.unlink = wtfs_unlink;
-	wtfs_oper.rmdir = wtfs_rmdir;*/
+	wtfs_oper.rmdir = wtfs_rmdir;
+	wtfs_oper.flush = wtfs_flush;
 	wtfs_oper.rename = wtfs_rename;
-	/*wtfs_oper.link = wtfs_link;
+	wtfs_oper.link = wtfs_link;
 	wtfs_oper.chmod = wtfs_chmod;
 	wtfs_oper.chown = wtfs_chown;
-	wtfs_oper.truncate = wtfs_truncate;*/
+	wtfs_oper.truncate = wtfs_truncate;
 	wtfs_oper.open = wtfs_open;
 	wtfs_oper.read = wtfs_read;
 	wtfs_oper.write = wtfs_write;
-	/*wtfs_oper.statfs = wtfs_statfs;*/
+	wtfs_oper.statfs = wtfs_statfs;
 	wtfs_oper.release = wtfs_release;
 	wtfs_oper.fsync = wtfs_fsync;
 	wtfs_oper.flag_nullpath_ok = 0;

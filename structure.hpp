@@ -86,6 +86,7 @@ class file_content_iterator
 	chunk* chunk_;
 	wtfs* fs;
 	off_t* size_;
+	off_t offset;
 
 	friend class boost::iterator_core_access;
 

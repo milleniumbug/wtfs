@@ -179,7 +179,12 @@ void directory::dump_cache()
 }
 
 file_content_iterator::file_content_iterator()
-    : pos(nullptr), end(nullptr), chunk_(nullptr), fs(nullptr)
+    : pos(nullptr),
+      end(nullptr),
+      chunk_(nullptr),
+      fs(nullptr),
+      size_(nullptr),
+      offset(0)
 {
 }
 
@@ -187,6 +192,7 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 {
 	this->fs = &fs;
 	this->size_ = &file.size;
+	this->offset = 0;
 	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
@@ -202,6 +208,7 @@ void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 void file_content_iterator::increment()
 {
 	++pos;
+	++offset;
 	if(pos == end)
 		next_chunk(
 		    std::make_pair(chunk_->next_chunk_begin, chunk_->next_chunk_end));
@@ -219,6 +226,8 @@ bool file_content_iterator::equal(const file_content_iterator& other) const
 char& file_content_iterator::dereference() const
 {
 	char& c = *pos;
+	auto s = *size_;
+	*size_ = std::max(s, offset);
 	return c;
 }
 
