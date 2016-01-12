@@ -81,12 +81,12 @@ class file_content_iterator
 	off_t size();
 
 	private:
-	char* pos;
-	char* end;
+	char* pos_;
+	char* end_;
 	chunk* chunk_;
-	wtfs* fs;
+	wtfs* fs_;
 	off_t* size_;
-	off_t offset;
+	off_t offset_;
 
 	friend class boost::iterator_core_access;
 

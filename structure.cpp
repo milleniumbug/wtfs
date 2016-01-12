@@ -179,37 +179,45 @@ void directory::dump_cache()
 }
 
 file_content_iterator::file_content_iterator()
-    : pos(nullptr),
-      end(nullptr),
+    : pos_(nullptr),
+      end_(nullptr),
       chunk_(nullptr),
-      fs(nullptr),
+      fs_(nullptr),
       size_(nullptr),
-      offset(0)
+      offset_(0)
 {
 }
 
 file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 {
-	this->fs = &fs;
+	this->fs_ = &fs;
 	this->size_ = &file.size;
-	this->offset = 0;
+	this->offset_ = 0;
 	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
 void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 {
-	chunk_ = fs->load_chunk(range);
-	pos = chunk_->data;
+	if(range == make_from(range, 0, 0))
+	{
+		range = allocate_chunk(1, *fs_);
+		chunk_->next_chunk_begin = range.first;
+		chunk_->next_chunk_end = range.second;
+	}
+	chunk_ = fs_->load_chunk(range);
+	pos_ = chunk_->data;
 	off_t clusters = range.second - range.first + 1;
 	size_t chunk_size = clusters * block_size - sizeof(chunk);
-	end = pos + chunk_size;
+	end_ = pos_ + chunk_size;
 }
 
 void file_content_iterator::increment()
 {
-	++pos;
-	++offset;
-	if(pos == end)
+	++pos_;
+	++offset_;
+	auto s = *size_;
+	*size_ = std::max(s, offset_);
+	if(pos_ == end_)
 		next_chunk(
 		    std::make_pair(chunk_->next_chunk_begin, chunk_->next_chunk_end));
 }
@@ -218,16 +226,14 @@ bool file_content_iterator::equal(const file_content_iterator& other) const
 {
 	auto tied = [](const file_content_iterator& it)
 	{
-		return std::tie(it.pos, it.chunk_, it.fs);
+		return std::tie(it.pos_, it.chunk_, it.fs_);
 	};
 	return tied(*this) == tied(other);
 }
 
 char& file_content_iterator::dereference() const
 {
-	char& c = *pos;
-	auto s = *size_;
-	*size_ = std::max(s, offset);
+	char& c = *pos_;
 	return c;
 }
 

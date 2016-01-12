@@ -127,3 +127,9 @@ lambda_visitor<ReturnType, Lambdas...> make_lambda_visitor(Lambdas... lambdas)
 	// support list-initialization yet
 	// return lambda_visitor<ReturnType, Lambdas...>(lambdas...);
 }
+
+template <typename T, typename... Args>
+T make_from(const T& t, Args&&... args)
+{
+	return T(std::forward<Args>(args)...);
+}

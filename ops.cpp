@@ -140,11 +140,37 @@ int wtfs_rename(const char* rawfrom, const char* rawto)
 	return -47;
 }
 
-int wtfs_link(const char* from, const char* to)
+int wtfs_link(const char* rawfrom, const char* rawto)
 {
-	// res = link(from, to);
-	std::cerr << "not implemented: " << __func__ << "\n";
-	return -48;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto resolv_from = resolve_dirs(rawfrom, fs);
+	auto resolv_to = resolve_dirs(rawto, fs);
+	// TODO: Handle EACCES, EDQUOT, ENAMETOOLONG
+	if(resolv_to.failed_to_resolve == 0)
+		return -EEXIST;
+	if(resolv_from.failed_to_resolve > 0 || resolv_to.failed_to_resolve > 1)
+		return -ENOTDIR; // or -ENOENT TODO: these two cases are conflated
+	{
+		auto for_dir = [&](directory* dir)
+		{
+			return -EPERM;
+		};
+		auto for_file = [&](size_t inode)
+		{
+			auto& file = fs.files[inode];
+			if(file.hardlink_count == std::numeric_limits<nlink_t>::max())
+				return -EMLINK;
+			auto last_component = path_from_rawpath(rawto).back();
+			auto& parent_to = *resolv_to.parents.back().second;
+			parent_to.files().emplace(last_component, inode);
+			++file.hardlink_count;
+			return 0;
+		};
+		return boost::apply_visitor(make_lambda_visitor<int>(for_dir, for_file),
+		    resolv_from.base->second);
+	}
 }
 
 int wtfs_chmod(const char* path, mode_t mode)
@@ -195,7 +221,7 @@ int wtfs_truncate(const char* rawpath, const off_t new_size)
 			}
 			else
 			{
-				return -52;
+				return -44;
 			}
 		};
 		return boost::apply_visitor(
@@ -249,7 +275,7 @@ int wtfs_write(const char* path, const char* buf, size_t size, off_t offset,
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
 	auto& it = *fs.file_descriptions[fi->fh];
-	std::copy_n(buf, size, it);
+	it = std::copy_n(buf, size, it);
 	return size;
 }
 
@@ -283,7 +309,7 @@ void* wtfs_init(fuse_conn_info* conn)
 {
 	auto fs = std::make_unique<wtfs>();
 	fs->bpb = std::make_unique<wtfs_bpb>();
-	fs->files = std::make_unique<wtfs_file[]>(15);
+	fs->files = std::make_unique<wtfs_file[]>(35);
 	{
 		auto& f = fs->files[0];
 		f.size = 4000;
@@ -427,6 +453,8 @@ void* wtfs_init(fuse_conn_info* conn)
 		fs->root.subdirectories().emplace("asdf", dir);
 		fs->root.files().emplace("laffo_pusty_plik", 4);
 	}
+	fs->allocator.file = 5;
+	fs->allocator.chunk = 30;
 	run_tests(*fs);
 	// sample data for a filesystem
 	return fs.release();
@@ -443,7 +471,7 @@ struct fuse_operations wtfs_operations()
 	wtfs_oper.init = wtfs_init;
 	wtfs_oper.destroy = wtfs_destroy;
 	wtfs_oper.getattr = wtfs_getattr;
-	wtfs_oper.access = wtfs_access;
+	// wtfs_oper.access = wtfs_access;
 	wtfs_oper.readlink = wtfs_readlink;
 	wtfs_oper.readdir = wtfs_readdir;
 	wtfs_oper.mknod = wtfs_mknod;
