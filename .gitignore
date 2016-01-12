@@ -1,0 +1,10 @@
+.gdb_history
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles
+.ninja_deps
+.ninja_log
+OS_Projekt_WTFS
+build.ninja
+rules.ninja
+
