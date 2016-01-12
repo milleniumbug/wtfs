@@ -307,6 +307,13 @@ int wtfs_fsync(const char* path, int isdatasync, struct fuse_file_info* fi)
 
 void* wtfs_init(fuse_conn_info* conn)
 {
+	// TODO: implement
+	assert(false && "unimplemented");
+	return nullptr;
+}
+
+void* wtfs_test_init(fuse_conn_info* conn)
+{
 	auto fs = std::make_unique<wtfs>();
 	fs->bpb = std::make_unique<wtfs_bpb>();
 	fs->files = std::make_unique<wtfs_file[]>(35);
@@ -465,6 +472,11 @@ void wtfs_destroy(void* private_data)
 	std::unique_ptr<wtfs> p(static_cast<wtfs*>(private_data));
 }
 
+void wtfs_test_destroy(void* private_data)
+{
+	std::unique_ptr<wtfs> p(static_cast<wtfs*>(private_data));
+}
+
 struct fuse_operations wtfs_operations()
 {
 	struct fuse_operations wtfs_oper = {};
@@ -493,4 +505,12 @@ struct fuse_operations wtfs_operations()
 	wtfs_oper.fsync = wtfs_fsync;
 	wtfs_oper.flag_nullpath_ok = 0;
 	return wtfs_oper;
+}
+
+struct fuse_operations wtfs_test_operations()
+{
+	auto wtfs_test_oper = wtfs_operations();
+	wtfs_test_oper.init = wtfs_test_init;
+	wtfs_test_oper.destroy = wtfs_test_destroy;
+	return wtfs_test_oper;
 }

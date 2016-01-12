@@ -153,3 +153,55 @@ size_t allocate_file(wtfs& fs);
 uint64_t create_file_description(size_t fileindex, wtfs& fs);
 void destroy_file_description(uint64_t file_description, wtfs& fs);
 void deallocate_file(size_t fh, wtfs& fs);
+
+namespace detail
+{
+template <typename T>
+struct SuppressTemplateDeduction
+{
+	typedef T type;
+};
+
+template <typename T>
+struct DependentFalse
+{
+	static const bool value = false;
+};
+}
+
+template <typename T, typename Ptr,
+    typename std::enable_if<!std::is_array<T>::value &&
+                            std::is_same<typename std::decay<Ptr>::type,
+                                void*>::value>::type* = nullptr>
+std::unique_ptr<T, munmap_deleter> mmap_unique(
+    Ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+	using Uniq = std::unique_ptr<T, munmap_deleter>;
+	return Uniq(static_cast<typename Uniq::pointer>(
+	                mmap(addr, length, prot, flags, fd, offset)),
+	    munmap_deleter(length));
+}
+
+template <typename T, typename Ptr,
+    typename std::enable_if<
+        std::is_array<T>::value && std::extent<T>::value == 0 &&
+        std::is_same<typename std::decay<Ptr>::type, void*>::value>::type* =
+        nullptr>
+std::unique_ptr<typename std::remove_extent<T>::type[], munmap_deleter>
+mmap_unique(Ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+	using P = typename std::remove_extent<T>::type;
+	using Uniq = std::unique_ptr<P[], munmap_deleter>;
+	return Uniq(static_cast<typename Uniq::pointer>(
+	                mmap(addr, length, prot, flags, fd, offset)),
+	    munmap_deleter(length));
+}
+
+template <typename T, typename... Args,
+    typename std::enable_if<std::is_array<T>::value &&
+                            std::extent<T>::value != 0>::type* = nullptr>
+void mmap_unique(Args&&... args)
+{
+	static_assert(detail::DependentFalse<T>::value,
+	    "mmap_unique of array with a known bound is disallowed");
+}

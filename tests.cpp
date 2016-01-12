@@ -85,7 +85,6 @@ void tests(Tester test, wtfs& fs)
 
 void run_tests(wtfs& fs)
 {
-#ifndef NDEBUG
 	int counter = 0;
 	auto test = [&](auto&& name, auto&& fun)
 	{
@@ -96,5 +95,4 @@ void run_tests(wtfs& fs)
 		std::cout.flush();
 	};
 	tests::tests(test, fs);
-#endif
 }
