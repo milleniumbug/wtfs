@@ -7,6 +7,7 @@ struct munmap_deleter
 	size_t length;
 
 	munmap_deleter(size_t length) : length(length) {}
+	munmap_deleter() = default;
 	template <typename T>
 	void operator()(T* ptr)
 	{
@@ -115,9 +116,9 @@ struct directory
 struct wtfs
 {
 	unique_fd filesystem_fd;
-	std::unique_ptr<wtfs_bpb> bpb;
-	std::unique_ptr<wtfs_file[]> files;
-	std::map<std::pair<off_t, off_t>, std::unique_ptr<chunk, free_deleter>>
+	std::unique_ptr<wtfs_bpb, munmap_deleter> bpb;
+	std::unique_ptr<wtfs_file[], munmap_deleter> files;
+	std::map<std::pair<off_t, off_t>, std::unique_ptr<chunk, munmap_deleter>>
 	    chunk_cache;
 	directory root;
 	std::map<uint64_t, std::unique_ptr<file_content_iterator>>
@@ -169,32 +170,47 @@ struct DependentFalse
 };
 }
 
-template <typename T, typename Ptr,
-    typename std::enable_if<!std::is_array<T>::value &&
-                            std::is_same<typename std::decay<Ptr>::type,
-                                void*>::value>::type* = nullptr>
+template <typename T,
+    typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
 std::unique_ptr<T, munmap_deleter> mmap_unique(
-    Ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
+    void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
+	using dependent_void_pointer =
+	    typename std::conditional<detail::DependentFalse<T>::value, T,
+	        void*>::type;
 	using Uniq = std::unique_ptr<T, munmap_deleter>;
-	return Uniq(static_cast<typename Uniq::pointer>(
-	                mmap(addr, length, prot, flags, fd, offset)),
-	    munmap_deleter(length));
+	void* allocated =
+	    mmap(dependent_void_pointer(addr), length, prot, flags, fd, offset);
+	if(allocated == MAP_FAILED)
+	{
+		perror("mmap");
+		return Uniq(nullptr);
+	}
+	return Uniq(
+	    static_cast<typename Uniq::pointer>(allocated), munmap_deleter(length));
 }
 
-template <typename T, typename Ptr,
-    typename std::enable_if<
-        std::is_array<T>::value && std::extent<T>::value == 0 &&
-        std::is_same<typename std::decay<Ptr>::type, void*>::value>::type* =
-        nullptr>
+template <typename T,
+    typename std::enable_if<std::is_array<T>::value &&
+                            std::extent<T>::value == 0>::type* = nullptr>
 std::unique_ptr<typename std::remove_extent<T>::type[], munmap_deleter>
-mmap_unique(Ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
+mmap_unique(
+    void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
+	using dependent_void_pointer =
+	    typename std::conditional<detail::DependentFalse<T>::value, T,
+	        void*>::type;
 	using P = typename std::remove_extent<T>::type;
 	using Uniq = std::unique_ptr<P[], munmap_deleter>;
-	return Uniq(static_cast<typename Uniq::pointer>(
-	                mmap(addr, length, prot, flags, fd, offset)),
-	    munmap_deleter(length));
+	void* allocated =
+	    mmap(dependent_void_pointer(addr), length, prot, flags, fd, offset);
+	if(allocated == MAP_FAILED)
+	{
+		perror("mmap");
+		return Uniq(nullptr);
+	}
+	return Uniq(
+	    static_cast<typename Uniq::pointer>(allocated), munmap_deleter(length));
 }
 
 template <typename T, typename... Args,
@@ -204,4 +220,17 @@ void mmap_unique(Args&&... args)
 {
 	static_assert(detail::DependentFalse<T>::value,
 	    "mmap_unique of array with a known bound is disallowed");
+}
+
+using mmap_alloc_impl_tuple = std::tuple<void*, size_t, int, int, int, off_t>;
+mmap_alloc_impl_tuple mmap_alloc_impl(size_t length, off_t offset, wtfs& fs);
+
+template <typename T>
+std::unique_ptr<T, munmap_deleter> mmap_alloc(
+    size_t length, off_t offset, wtfs& fs)
+{
+	using std::get;
+	auto res = mmap_alloc_impl(length, offset, fs);
+	return mmap_unique<T>(get<0>(res), get<1>(res), get<2>(res), get<3>(res),
+	    get<4>(res), get<5>(res));
 }

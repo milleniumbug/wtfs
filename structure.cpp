@@ -124,8 +124,8 @@ std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs)
 	decltype(fs.chunk_cache)::iterator it;
 	bool inserted;
 	std::tie(it, inserted) = fs.chunk_cache.emplace(
-	    allocated_chunk, std::unique_ptr<chunk, free_deleter>(
-	                         static_cast<chunk*>(malloc(block_size * length))));
+	    allocated_chunk, mmap_alloc<chunk>(block_size * length,
+	                         fs.bpb->data_offset + left * block_size, fs));
 	auto& block = *it->second;
 	memset(&block, 0xCC, block_size * length);
 	block.next_chunk_begin = 0;
@@ -240,4 +240,15 @@ char& file_content_iterator::dereference() const
 off_t file_content_iterator::size()
 {
 	return *size_;
+}
+
+mmap_alloc_impl_tuple mmap_alloc_impl(size_t length, off_t offset, wtfs& fs)
+{
+#ifdef WTFS_TEST1
+	return mmap_alloc_impl_tuple(nullptr, length, PROT_READ | PROT_WRITE,
+	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#else
+	return mmap_alloc_impl_tuple(nullptr, length, PROT_READ | PROT_WRITE,
+	    MAP_PRIVATE, fs.filesystem_fd.get(), offset);
+#endif
 }

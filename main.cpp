@@ -2,14 +2,13 @@
 
 static_assert((__BYTE_ORDER == __LITTLE_ENDIAN), "not a little endian machine");
 
-#define WTFS_TEST1
 #include "structure.hpp"
 #include "ops.hpp"
 
 int main(int argc, char** argv)
 {
 	auto wtfs_oper =
-#if WTFS_TEST1
+#ifdef WTFS_TEST1
 	    wtfs_test_operations();
 #else
 	    wtfs_operations();

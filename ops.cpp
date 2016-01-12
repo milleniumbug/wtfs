@@ -315,8 +315,20 @@ void* wtfs_init(fuse_conn_info* conn)
 void* wtfs_test_init(fuse_conn_info* conn)
 {
 	auto fs = std::make_unique<wtfs>();
-	fs->bpb = std::make_unique<wtfs_bpb>();
-	fs->files = std::make_unique<wtfs_file[]>(35);
+	const off_t file_count = 150;
+
+	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
+	auto& bpb = *fs->bpb;
+	{
+		const char header[] = "WTFS";
+		copy(std::begin(header), std::end(header), std::begin(bpb.header),
+		    std::end(bpb.header));
+		bpb.version = 1;
+		bpb.fdtable_offset = block_size * 17;
+		bpb.data_offset = bpb.fdtable_offset + block_size * file_count;
+	}
+	fs->files = mmap_alloc<wtfs_file[]>(
+	    file_count * block_size, bpb.fdtable_offset, *fs);
 	{
 		auto& f = fs->files[0];
 		f.size = 4000;
@@ -383,8 +395,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(10, 11),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size * 2))));
+			    mmap_alloc<chunk>(
+			        block_size * 2, bpb.data_offset + 10 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size * 2);
@@ -395,8 +407,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(13, 13),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size))));
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 13 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -407,8 +419,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(14, 14),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size))));
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 14 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -419,8 +431,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(16, 16),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size))));
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 16 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -431,8 +443,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(17, 17),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size))));
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 17 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -443,8 +455,8 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		{
 			std::tie(it, inserted) = fs->chunk_cache.emplace(
 			    std::make_pair(18, 18),
-			    std::unique_ptr<chunk, free_deleter>(
-			        static_cast<chunk*>(malloc(block_size))));
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 18 * block_size, *fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
