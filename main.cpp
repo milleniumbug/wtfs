@@ -7,6 +7,7 @@ static_assert((__BYTE_ORDER == __LITTLE_ENDIAN), "not a little endian machine");
 
 int main(int argc, char** argv)
 {
+	char path[] = "/dev/sdb1";
 	auto wtfs_oper =
 #ifdef WTFS_TEST1
 	    wtfs_test_operations();
@@ -14,5 +15,5 @@ int main(int argc, char** argv)
 	    wtfs_operations();
 #endif
 	;
-	return fuse_main(argc, argv, &wtfs_oper, nullptr);
+	return fuse_main(argc, argv, &wtfs_oper, path);
 }

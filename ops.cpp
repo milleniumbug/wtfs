@@ -307,16 +307,37 @@ int wtfs_fsync(const char* path, int isdatasync, struct fuse_file_info* fi)
 
 void* wtfs_init(fuse_conn_info* conn)
 {
-	// TODO: implement
-	assert(false && "unimplemented");
-	return nullptr;
+	struct fuse_context* ctx = fuse_get_context();
+	auto path = static_cast<const char*>(ctx->private_data);
+
+	auto fs = std::make_unique<wtfs>();
+	fs->filesystem_fd.reset(open(path, O_RDWR));
+	perror("open");
+	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
+	auto& bpb = *fs->bpb;
+	const char* expected = "WTFS";
+	const char* expected_end = expected + sizeof(bpb.header);
+	if(!std::equal(expected, expected_end, bpb.header) || bpb.version != 1)
+		return nullptr;
+	off_t file_count = (bpb.data_offset - bpb.fdtable_offset) / block_size;
+	fs->files = mmap_alloc<wtfs_file[]>(
+	    file_count * block_size, bpb.fdtable_offset, *fs);
+
+	fs->root.directory_file = 0;
+	// load root directory
+	// initialize allocator
+	return fs.release();
 }
 
 void* wtfs_test_init(fuse_conn_info* conn)
 {
+	struct fuse_context* ctx = fuse_get_context();
+	auto path = static_cast<const char*>(ctx->private_data);
+
 	auto fs = std::make_unique<wtfs>();
 	const off_t file_count = 150;
-
+	fs->filesystem_fd.reset(open(path, O_RDWR));
+	perror("open");
 	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
 	auto& bpb = *fs->bpb;
 	{
@@ -348,7 +369,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.first_chunk_end = 11;
 		f.last_chunk_begin = 10;
 		f.last_chunk_end = 11;
-		f.mode = S_IFDIR | 0666;
+		f.mode = S_IFDIR | 0777;
 		f.hardlink_count = 1;
 		f.user = 1000;
 		f.group = 1000;
@@ -471,6 +492,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		dir.files().emplace("ziom", 3);
 		fs->root.subdirectories().emplace("asdf", dir);
 		fs->root.files().emplace("laffo_pusty_plik", 4);
+		fs->root.directory_file = 0;
 	}
 	fs->allocator.file = 5;
 	fs->allocator.chunk = 30;

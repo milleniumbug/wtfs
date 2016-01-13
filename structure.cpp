@@ -148,9 +148,13 @@ chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
 	}
 	else
 	{
-		// load chunk
-		assert(false && "unimplemented");
-		return nullptr;
+		decltype(chunk_cache)::iterator it;
+		bool inserted;
+		std::tie(it, inserted) = chunk_cache.emplace(
+		    key, mmap_alloc<chunk>(block_size,
+		             bpb->data_offset + key.first * block_size, *this));
+		assert(inserted);
+		return it->second.get();
 	}
 }
 
@@ -244,11 +248,7 @@ off_t file_content_iterator::size()
 
 mmap_alloc_impl_tuple mmap_alloc_impl(size_t length, off_t offset, wtfs& fs)
 {
-#ifdef WTFS_TEST1
 	return mmap_alloc_impl_tuple(nullptr, length, PROT_READ | PROT_WRITE,
-	    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-#else
-	return mmap_alloc_impl_tuple(nullptr, length, PROT_READ | PROT_WRITE,
-	    MAP_PRIVATE, fs.filesystem_fd.get(), offset);
-#endif
+	    fs.filesystem_fd ? MAP_SHARED : MAP_PRIVATE | MAP_ANONYMOUS,
+	    fs.filesystem_fd.get(), offset);
 }
