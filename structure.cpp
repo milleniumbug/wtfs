@@ -182,8 +182,7 @@ void directory::insert(boost::string_ref component, size_t file)
 
 void directory::erase(boost::string_ref component)
 {
-	if(cached == cache_state::empty)
-		fill_cache();
+	fill_cache();
 	subdirectories_.erase(component.to_string());
 	files_.erase(component.to_string());
 	cached = cache_state::dirty;
@@ -192,8 +191,7 @@ void directory::erase(boost::string_ref component)
 boost::optional<directory&> directory::lookup_directory(
     boost::string_ref component)
 {
-	if(cached == cache_state::empty)
-		fill_cache();
+	fill_cache();
 	if(auto fileopt = at(subdirectories_, component.to_string()))
 	{
 		return fileopt->second;
@@ -203,8 +201,7 @@ boost::optional<directory&> directory::lookup_directory(
 
 boost::optional<size_t> directory::lookup_file(boost::string_ref component)
 {
-	if(cached == cache_state::empty)
-		fill_cache();
+	fill_cache();
 	if(auto diropt = at(files_, component.to_string()))
 	{
 		return diropt->second;
@@ -215,8 +212,7 @@ boost::optional<size_t> directory::lookup_file(boost::string_ref component)
 boost::optional<boost::variant<directory&, size_t>> directory::lookup(
     boost::string_ref component)
 {
-	if(cached == cache_state::empty)
-		fill_cache();
+	fill_cache();
 	if(auto fileopt = at(files_, component.to_string()))
 	{
 		return boost::variant<directory&, size_t>(fileopt->second);
@@ -230,40 +226,33 @@ boost::optional<boost::variant<directory&, size_t>> directory::lookup(
 
 void directory::fill_cache()
 {
-	auto& file = fs_->files[directory_file];
-	const off_t filesize = file.size;
-	file_content_iterator it(fs_->files[directory_file], *fs_);
-	std::string buffer;
-	size_t index;
-	auto index_raw_range = make_raw_range(index);
-	while(true)
-	{
-		if(filesize - it.offset() < static_cast<off_t>(sizeof index))
-			break;
-		std::copy_n(it,
-		    std::min(filesize - it.offset(), static_cast<off_t>(sizeof index)),
-		    index_raw_range.begin());
-		// HAX TODO HAX
-		++it;
-		// BUG
-		boost::algorithm::copy_until(it, file_content_iterator(),
-		    std::back_inserter(buffer), [&](char c)
-		    {
-			    return c == '\0' || (filesize - it.offset() <
-			                            static_cast<off_t>(sizeof index));
-			});
+	if(cached != cache_state::empty)
+		return;
 
-		++it; // skip null terminator
+	auto& file = fs_->files[directory_file];
+	file_content_iterator it(fs_->files[directory_file], *fs_);
+	std::vector<char> buffer;
+	buffer.reserve(it.size());
+	std::copy_n(it, it.size(), std::back_inserter(buffer));
+	const char* beg = buffer.data();
+	const char* end = beg + buffer.size();
+	while(beg != end)
+	{
+		size_t index;
+		std::copy_n(beg, sizeof index, reinterpret_cast<char*>(&index));
+		beg += sizeof index;
+		boost::string_ref s(beg);
+		beg += s.size();
+		++beg;
 		if(S_ISDIR(file.mode))
 		{
 			directory newdir(index, *fs_);
-			subdirectories_.emplace(buffer, std::move(newdir));
+			subdirectories_.emplace(s, std::move(newdir));
 		}
 		else
 		{
-			files_.emplace(buffer, index);
+			files_.emplace(s, index);
 		}
-		buffer.clear();
 	}
 	cached = cache_state::clean;
 }
@@ -293,6 +282,7 @@ void directory::dump_cache()
 
 size_t directory::entries_count()
 {
+	fill_cache();
 	return subdirectories_.size() + files_.size();
 }
 

@@ -11,6 +11,7 @@ struct munmap_deleter
 	template <typename T>
 	void operator()(T* ptr)
 	{
+		msync(ptr, length, MS_SYNC);
 		munmap(ptr, length);
 	}
 };
@@ -112,6 +113,7 @@ struct directory
 	template <typename Function>
 	void enumerate_entries(Function f)
 	{
+		fill_cache();
 		for(auto&& x : subdirectories_)
 			f(x);
 		for(auto&& x : files_)

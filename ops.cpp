@@ -14,6 +14,7 @@ int wtfs_getattr(const char* path, struct stat* stbuf)
 	if(fileopt)
 	{
 		auto& file = fs.files[fileopt->second];
+		stbuf->st_ino = static_cast<ino_t>(fileopt->second);
 		stbuf->st_mode = file.mode;
 		stbuf->st_nlink = file.hardlink_count;
 		stbuf->st_uid = file.user;
@@ -421,7 +422,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 		f.first_chunk_end = 9700;
 		f.last_chunk_begin = 18;
 		f.last_chunk_end = 9700;
-		f.mode = S_IFREG | 0740;
+		f.mode = S_IFREG | 0777;
 		f.hardlink_count = 1;
 		f.user = 1000;
 		f.group = 1000;
@@ -449,7 +450,6 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size * 2);
-			memset(block.data, 'a', 5000);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
@@ -461,7 +461,6 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
-			memset(block.data, 'a', 4000);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
