@@ -1,7 +1,6 @@
 #pragma once
 
 struct fuse_operations wtfs_operations();
-struct fuse_operations wtfs_test_operations();
 
 template <typename RandomAccessIterator1, typename RandomAccessIterator2>
 std::ptrdiff_t copy(RandomAccessIterator1 begin1, RandomAccessIterator1 end1,

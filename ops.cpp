@@ -305,53 +305,20 @@ int wtfs_fsync(const char* path, int isdatasync, struct fuse_file_info* fi)
 	return 0;
 }
 
-void* wtfs_init(fuse_conn_info* conn)
+auto fill_bpb = [](wtfs_bpb& bpb)
 {
-	struct fuse_context* ctx = fuse_get_context();
-	auto path = static_cast<const char*>(ctx->private_data);
+	const char header[] = "WTFS";
+	copy(std::begin(header), std::end(header), std::begin(bpb.header),
+	    std::end(bpb.header));
+	bpb.version = 1;
+	bpb.fdtable_offset = block_size * 17;
+	bpb.data_offset = bpb.fdtable_offset + block_size * 150;
+};
 
-	auto fs = std::make_unique<wtfs>();
-	fs->filesystem_fd.reset(open(path, O_RDWR));
-	perror("open");
-	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
-	auto& bpb = *fs->bpb;
-	const char* expected = "WTFS";
-	const char* expected_end = expected + sizeof(bpb.header);
-	if(!std::equal(expected, expected_end, bpb.header) || bpb.version != 1)
-		return nullptr;
-	off_t file_count = (bpb.data_offset - bpb.fdtable_offset) / block_size;
-	fs->files = mmap_alloc<wtfs_file[]>(
-	    file_count * block_size, bpb.fdtable_offset, *fs);
-
-	fs->root.directory_file = 0;
-	// load root directory
-	// initialize allocator
-	return fs.release();
-}
-
-void* wtfs_test_init(fuse_conn_info* conn)
+auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 {
-	struct fuse_context* ctx = fuse_get_context();
-	auto path = static_cast<const char*>(ctx->private_data);
-
-	auto fs = std::make_unique<wtfs>();
-	const off_t file_count = 150;
-	fs->filesystem_fd.reset(open(path, O_RDWR));
-	perror("open");
-	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
-	auto& bpb = *fs->bpb;
 	{
-		const char header[] = "WTFS";
-		copy(std::begin(header), std::end(header), std::begin(bpb.header),
-		    std::end(bpb.header));
-		bpb.version = 1;
-		bpb.fdtable_offset = block_size * 17;
-		bpb.data_offset = bpb.fdtable_offset + block_size * file_count;
-	}
-	fs->files = mmap_alloc<wtfs_file[]>(
-	    file_count * block_size, bpb.fdtable_offset, *fs);
-	{
-		auto& f = fs->files[0];
+		auto& f = fs.files[0];
 		f.size = 4000;
 		f.first_chunk_begin = 13;
 		f.first_chunk_end = 13;
@@ -363,7 +330,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.group = 0;
 	}
 	{
-		auto& f = fs->files[1];
+		auto& f = fs.files[1];
 		f.size = 5000;
 		f.first_chunk_begin = 10;
 		f.first_chunk_end = 11;
@@ -375,7 +342,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.group = 1000;
 	}
 	{
-		auto& f = fs->files[2];
+		auto& f = fs.files[2];
 		f.size = 5;
 		f.first_chunk_begin = 14;
 		f.first_chunk_end = 14;
@@ -387,7 +354,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.group = 1000;
 	}
 	{
-		auto& f = fs->files[3];
+		auto& f = fs.files[3];
 		f.size = 7000;
 		f.first_chunk_begin = 16;
 		f.first_chunk_end = 16;
@@ -399,7 +366,7 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.group = 1000;
 	}
 	{
-		auto& f = fs->files[4];
+		auto& f = fs.files[4];
 		f.size = 0;
 		f.first_chunk_begin = 18;
 		f.first_chunk_end = 18;
@@ -411,13 +378,13 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		f.group = 1000;
 	}
 	{
-		decltype(fs->chunk_cache)::iterator it;
+		decltype(fs.chunk_cache)::iterator it;
 		bool inserted;
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(10, 11),
 			    mmap_alloc<chunk>(
-			        block_size * 2, bpb.data_offset + 10 * block_size, *fs));
+			        block_size * 2, bpb.data_offset + 10 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size * 2);
@@ -426,10 +393,10 @@ void* wtfs_test_init(fuse_conn_info* conn)
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(13, 13),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 13 * block_size, *fs));
+			        block_size, bpb.data_offset + 13 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -438,10 +405,10 @@ void* wtfs_test_init(fuse_conn_info* conn)
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(14, 14),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 14 * block_size, *fs));
+			        block_size, bpb.data_offset + 14 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -450,10 +417,10 @@ void* wtfs_test_init(fuse_conn_info* conn)
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(16, 16),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 16 * block_size, *fs));
+			        block_size, bpb.data_offset + 16 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -462,10 +429,10 @@ void* wtfs_test_init(fuse_conn_info* conn)
 			block.next_chunk_end = 17;
 		}
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(17, 17),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 17 * block_size, *fs));
+			        block_size, bpb.data_offset + 17 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -474,10 +441,10 @@ void* wtfs_test_init(fuse_conn_info* conn)
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs->chunk_cache.emplace(
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
 			    std::make_pair(18, 18),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 18 * block_size, *fs));
+			        block_size, bpb.data_offset + 18 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -490,23 +457,52 @@ void* wtfs_test_init(fuse_conn_info* conn)
 		dir.directory_file = 1;
 		dir.files().emplace("koles", 2);
 		dir.files().emplace("ziom", 3);
-		fs->root.subdirectories().emplace("asdf", dir);
-		fs->root.files().emplace("laffo_pusty_plik", 4);
-		fs->root.directory_file = 0;
+		fs.root.subdirectories().emplace("asdf", dir);
+		fs.root.files().emplace("laffo_pusty_plik", 4);
+		fs.root.directory_file = 0;
 	}
-	fs->allocator.file = 5;
-	fs->allocator.chunk = 30;
-	run_tests(*fs);
+	fs.allocator.file = 5;
+	fs.allocator.chunk = 30;
+	run_tests(fs);
+};
+
+void* wtfs_init(fuse_conn_info* conn)
+{
+	struct fuse_context* ctx = fuse_get_context();
+	auto path = static_cast<const char*>(ctx->private_data);
+
+	auto fs = std::make_unique<wtfs>();
+	fs->filesystem_fd.reset(open(path, O_RDWR));
+	perror("open");
+	fs->size = fs->filesystem_fd
+	               ? lseek(fs->filesystem_fd.get(), 0, SEEK_END)
+	               : std::numeric_limits<decltype(fs->size)>::max();
+	perror("lseek");
+	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
+	auto& bpb = *fs->bpb;
+#ifdef WTFS_TEST1
+	fill_bpb(bpb);
+#endif
+	const char* expected = "WTFS";
+	const char* expected_end = expected + sizeof(bpb.header);
+	if(!std::equal(expected, expected_end, bpb.header) || bpb.version != 1)
+		return nullptr;
+	const off_t file_count =
+	    (bpb.data_offset - bpb.fdtable_offset) / block_size;
+	fs->files = mmap_alloc<wtfs_file[]>(
+	    file_count * block_size, bpb.fdtable_offset, *fs);
+
+	fs->root.directory_file = 0;
+	// load root directory
+	// initialize allocator
+#ifdef WTFS_TEST1
+	fill_rest(*fs, bpb);
+#endif
 	// sample data for a filesystem
 	return fs.release();
 }
 
 void wtfs_destroy(void* private_data)
-{
-	std::unique_ptr<wtfs> p(static_cast<wtfs*>(private_data));
-}
-
-void wtfs_test_destroy(void* private_data)
 {
 	std::unique_ptr<wtfs> p(static_cast<wtfs*>(private_data));
 }
@@ -539,12 +535,4 @@ struct fuse_operations wtfs_operations()
 	wtfs_oper.fsync = wtfs_fsync;
 	wtfs_oper.flag_nullpath_ok = 0;
 	return wtfs_oper;
-}
-
-struct fuse_operations wtfs_test_operations()
-{
-	auto wtfs_test_oper = wtfs_operations();
-	wtfs_test_oper.init = wtfs_test_init;
-	wtfs_test_oper.destroy = wtfs_test_destroy;
-	return wtfs_test_oper;
 }

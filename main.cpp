@@ -17,12 +17,6 @@ int main(int argc, char** argv)
 	std::rotate(argv + 1, argv + 2, argv + argc);
 	argv[argc - 1] = nullptr;
 	--argc;
-	auto wtfs_oper =
-#ifdef WTFS_TEST1
-	    wtfs_test_operations();
-#else
-	    wtfs_operations();
-#endif
-	;
+	auto wtfs_oper = wtfs_operations();
 	return fuse_main(argc, argv, &wtfs_oper, path.get());
 }

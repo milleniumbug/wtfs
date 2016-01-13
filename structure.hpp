@@ -123,6 +123,7 @@ struct wtfs
 	directory root;
 	std::map<uint64_t, std::unique_ptr<file_content_iterator>>
 	    file_descriptions;
+	off_t size;
 
 	chunk* load_chunk(std::pair<off_t, off_t> key);
 
