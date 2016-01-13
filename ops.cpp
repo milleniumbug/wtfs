@@ -319,7 +319,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 		f.first_chunk_end = 13;
 		f.last_chunk_begin = 13;
 		f.last_chunk_end = 13;
-		f.mode = S_IFDIR | 0555;
+		f.mode = S_IFDIR | 0755;
 		f.hardlink_count = 1;
 		f.user = 0;
 		f.group = 0;
@@ -368,6 +368,18 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 		f.last_chunk_begin = 18;
 		f.last_chunk_end = 18;
 		f.mode = S_IFREG | 0740;
+		f.hardlink_count = 1;
+		f.user = 1000;
+		f.group = 1000;
+	}
+	{
+		auto& f = fs.files[5];
+		f.size = 0;
+		f.first_chunk_begin = 19;
+		f.first_chunk_end = 19;
+		f.last_chunk_begin = 19;
+		f.last_chunk_end = 19;
+		f.mode = S_IFDIR | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
 		f.group = 1000;
@@ -446,14 +458,28 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
+		{
+			std::tie(it, inserted) = fs.chunk_cache.emplace(
+			    std::make_pair(19, 19),
+			    mmap_alloc<chunk>(
+			        block_size, bpb.data_offset + 19 * block_size, fs));
+			assert(inserted);
+			auto& block = *it->second;
+			memset(&block, 'z', block_size);
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
+		}
 	}
 	{
-		directory dir;
-		dir.directory_file = 1;
-		dir.files().emplace("koles", 2);
-		dir.files().emplace("ziom", 3);
-		fs.root.subdirectories().emplace("asdf", dir);
-		fs.root.files().emplace("laffo_pusty_plik", 4);
+		directory asdf_dir;
+		asdf_dir.directory_file = 1;
+		asdf_dir.insert("koles", 2);
+		asdf_dir.insert("ziom", 3);
+		directory laffo_pusty_katalog_dir;
+		laffo_pusty_katalog_dir.directory_file = 5;
+		fs.root.insert("asdf", asdf_dir);
+		fs.root.insert("laffo_pusty_plik", 4);
+		fs.root.insert("laffo_pusty_katalog", laffo_pusty_katalog_dir);
 		fs.root.directory_file = 0;
 	}
 	fs.allocator.file = 5;
