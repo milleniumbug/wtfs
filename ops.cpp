@@ -110,11 +110,33 @@ int wtfs_unlink(const char* path)
 	return -45;
 }
 
-int wtfs_rmdir(const char* path)
+int wtfs_rmdir(const char* rawpath)
 {
-	// res = rmdir(path);
-	std::cerr << "not implemented: " << __func__ << "\n";
-	return -46;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	// handle EACCESS, ENOENT, ENOTDIR, EPERM
+	auto resolv = resolve_dirs(rawpath, fs);
+	if(resolv.failed_to_resolve > 0)
+		return -ENOENT; // or ENOTDIR TODO
+
+	{
+		auto for_dir = [&](directory* dir)
+		{
+			auto& direct_parent = resolv.parents.back().second;
+			auto last_component = resolv.base->first;
+			if(dir->entries_count() > 0)
+				return -ENOTEMPTY;
+			direct_parent->erase(last_component);
+			return 0;
+		};
+		auto for_file = [&](size_t inode)
+		{
+			return -ENOTDIR;
+		};
+		return boost::apply_visitor(
+		    make_lambda_visitor<int>(for_dir, for_file), resolv.base->second);
+	}
 }
 
 int wtfs_symlink(const char* from, const char* to)
