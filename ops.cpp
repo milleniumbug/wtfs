@@ -493,15 +493,14 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 		}
 	}
 	{
-		directory asdf_dir;
-		asdf_dir.directory_file = 1;
+		directory asdf_dir(1);
 		asdf_dir.insert("koles", 2);
 		asdf_dir.insert("ziom", 3);
-		directory laffo_pusty_katalog_dir;
-		laffo_pusty_katalog_dir.directory_file = 5;
-		fs.root.insert("asdf", asdf_dir);
+		directory laffo_pusty_katalog_dir(5);
+		fs.root.insert("asdf", std::move(asdf_dir));
 		fs.root.insert("laffo_pusty_plik", 4);
-		fs.root.insert("laffo_pusty_katalog", laffo_pusty_katalog_dir);
+		fs.root.insert(
+		    "laffo_pusty_katalog", std::move(laffo_pusty_katalog_dir));
 		fs.root.directory_file = 0;
 	}
 	fs.allocator.file = 5;

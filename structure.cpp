@@ -139,6 +139,10 @@ void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs)
 	// TODO: a serious implementation
 }
 
+wtfs::wtfs() : root(0)
+{
+}
+
 chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
 {
 	auto it = chunk_cache.find(key);
@@ -162,7 +166,7 @@ void directory::insert(boost::string_ref component, directory dir)
 {
 	if(!lookup(component))
 	{
-		subdirectories_.emplace(component, dir);
+		subdirectories_.emplace(component, std::move(dir));
 		cached = cache_state::dirty;
 	}
 }
@@ -237,6 +241,10 @@ void directory::dump_cache()
 size_t directory::entries_count()
 {
 	return subdirectories_.size() + files_.size();
+}
+
+directory::directory(size_t directory_file) : directory_file(directory_file)
+{
 }
 
 file_content_iterator::file_content_iterator()

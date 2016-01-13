@@ -125,6 +125,14 @@ struct directory
 	void fill_cache();
 	void dump_cache();
 
+	// Big Five
+	directory(size_t directory_file);
+	~directory() = default;
+	directory(const directory&) = delete;
+	directory& operator=(const directory&) = delete;
+	directory(directory&&) = default;
+	directory& operator=(directory&&) = default;
+
 	private:
 	boost::container::map<std::string, directory> subdirectories_;
 	boost::container::map<std::string, size_t> files_;
@@ -149,6 +157,8 @@ struct wtfs
 		off_t file;
 		off_t chunk;
 	} allocator;
+
+	wtfs();
 };
 
 boost::optional<std::pair<directory&, size_t>> resolve_path(
