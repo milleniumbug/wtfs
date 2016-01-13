@@ -363,6 +363,7 @@ auto fill_bpb = [](wtfs_bpb& bpb)
 	bpb.version = 1;
 	bpb.fdtable_offset = block_size * 17;
 	bpb.data_offset = bpb.fdtable_offset + block_size * 15000;
+	bpb.data_end = 10000;
 };
 
 auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
@@ -417,7 +418,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	}
 	{
 		auto& f = fs.files[4];
-		f.size = 36000000;
+		f.size = 35791394;
 		f.first_chunk_begin = 18;
 		f.first_chunk_end = 9700;
 		f.last_chunk_begin = 18;
@@ -507,7 +508,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
-			std::generate(block.data, block.data + 36000000,
+			std::generate(block.data, block.data + 35791394,
 			    [c = unsigned('a')]() mutable
 			    {
 				    ++c;
@@ -573,8 +574,22 @@ void* wtfs_init(fuse_conn_info* conn)
 	    file_count * block_size, bpb.fdtable_offset, *fs);
 
 	fs->root.directory_file = 0;
-// load root directory
-// initialize allocator
+	// TODO: serious implementation
+	// allocator
+	{
+		wtfs_file* beg = fs->files.get();
+		wtfs_file* end = beg + file_count;
+		auto it = std::find_if(beg, end, [](wtfs_file& file)
+		    {
+			    return file.hardlink_count == 0;
+			});
+		assert(it != fs->files.get() + file_count);
+		fs->allocator.file = std::distance(beg, it);
+		fs->allocator.filepool_size = file_count;
+		fs->allocator.chunk = bpb.data_end;
+		fs->allocator.chunkpool_size =
+		    (fs->size - bpb.data_offset) / block_size;
+	}
 #ifdef WTFS_TEST1
 	fill_rest(*fs, bpb);
 #endif

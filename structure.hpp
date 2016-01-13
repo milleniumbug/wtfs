@@ -41,7 +41,8 @@ struct wtfs_bpb
 	char version;
 	off_t fdtable_offset;
 	off_t data_offset;
-	char padding[block_size - 24];
+	off_t data_end;
+	char padding[block_size - 32];
 };
 static_assert(sizeof(wtfs_bpb) == block_size, "sizeof incorrect");
 static_assert(
@@ -166,6 +167,8 @@ struct wtfs
 	{
 		off_t file;
 		off_t chunk;
+		size_t filepool_size;
+		size_t chunkpool_size;
 	} allocator;
 
 	wtfs();

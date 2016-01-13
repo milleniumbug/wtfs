@@ -120,6 +120,7 @@ std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs)
 	off_t left = fs.allocator.chunk;
 	off_t right = left + length - 1;
 	fs.allocator.chunk += length;
+	fs.bpb->data_end += length;
 	std::pair<off_t, off_t> allocated_chunk = std::make_pair(left, right);
 	decltype(fs.chunk_cache)::iterator it;
 	bool inserted;
@@ -259,6 +260,9 @@ void directory::fill_cache()
 
 void directory::dump_cache()
 {
+	if(cached != cache_state::dirty)
+		return;
+
 	auto& file = fs_->files[directory_file];
 	file.size = 0;
 	file_content_iterator it(file, *fs_);
