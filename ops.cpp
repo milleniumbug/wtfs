@@ -67,6 +67,7 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 	struct fuse_context* ctx = fuse_get_context();
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
+	assert(!S_ISDIR(mode));
 	auto resolv = resolve_dirs(rawpath, fs);
 	if(resolv.failed_to_resolve == 0)
 		return -EEXIST;
