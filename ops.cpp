@@ -268,6 +268,8 @@ int wtfs_truncate(const char* rawpath, const off_t new_size)
 			}
 			else
 			{
+				// it = std::fill_n(it, new_size - old_size, 0);
+				// return 0;
 				return -44;
 			}
 		};

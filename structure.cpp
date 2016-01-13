@@ -243,19 +243,25 @@ void directory::fill_cache()
 		std::copy_n(it,
 		    std::min(filesize - it.offset(), static_cast<off_t>(sizeof index)),
 		    index_raw_range.begin());
+		// HAX TODO HAX
+		++it;
+		// BUG
 		boost::algorithm::copy_until(it, file_content_iterator(),
 		    std::back_inserter(buffer), [&](char c)
 		    {
-			    return c == '\0';
+			    return c == '\0' || (filesize - it.offset() <
+			                            static_cast<off_t>(sizeof index));
 			});
+
+		++it; // skip null terminator
 		if(S_ISDIR(file.mode))
 		{
 			directory newdir(index, *fs_);
-			insert(buffer, index);
+			subdirectories_.emplace(buffer, std::move(newdir));
 		}
 		else
 		{
-			insert(buffer, index);
+			files_.emplace(buffer, index);
 		}
 		buffer.clear();
 	}
@@ -270,13 +276,15 @@ void directory::dump_cache()
 	const char null_terminator = '\0';
 	for(auto&& x : subdirectories_)
 	{
-		boost::copy(make_raw_range(x.second.directory_file), it);
+		const size_t index = x.second.directory_file;
+		boost::copy(make_raw_range(index), it);
 		boost::copy(x.first, it);
 		std::copy(&null_terminator, &null_terminator + 1, it);
 	}
 	for(auto&& x : files_)
 	{
-		boost::copy(make_raw_range(x.second), it);
+		const size_t index = x.second;
+		boost::copy(make_raw_range(index), it);
 		boost::copy(x.first, it);
 		std::copy(&null_terminator, &null_terminator + 1, it);
 	}
