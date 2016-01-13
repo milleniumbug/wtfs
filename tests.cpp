@@ -39,7 +39,7 @@ void tests(Tester test, wtfs& fs)
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root)};
 		    expected.base =
-		        std::make_pair("asdf", &fs.root.subdirectories()["asdf"]);
+		        std::make_pair("asdf", &fs.root.lookup_directory("asdf").get());
 		    expected.successfully_resolved = 2;
 		    expected.failed_to_resolve = 0;
 		    return resolve_result_tied(actual) ==
@@ -52,7 +52,8 @@ void tests(Tester test, wtfs& fs)
 		    resolve_result actual = resolve_dirs("/asdf/koles", fs);
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root),
-		        std::make_pair("asdf", &fs.root.subdirectories()["asdf"])};
+		        std::make_pair("asdf",
+		                            &fs.root.lookup_directory("asdf").get())};
 		    expected.base = std::make_pair("koles", 2);
 		    expected.successfully_resolved = 3;
 		    expected.failed_to_resolve = 0;
@@ -63,7 +64,8 @@ void tests(Tester test, wtfs& fs)
 		    resolve_result actual = resolve_dirs("/asdf/noexist", fs);
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root),
-		        std::make_pair("asdf", &fs.root.subdirectories()["asdf"])};
+		        std::make_pair("asdf",
+		                            &fs.root.lookup_directory("asdf").get())};
 		    expected.base = boost::none;
 		    expected.successfully_resolved = 2;
 		    expected.failed_to_resolve = 1;
@@ -74,7 +76,8 @@ void tests(Tester test, wtfs& fs)
 		    resolve_result actual = resolve_dirs("/asdf/koles/noexist", fs);
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root),
-		        std::make_pair("asdf", &fs.root.subdirectories()["asdf"])};
+		        std::make_pair("asdf",
+		                            &fs.root.lookup_directory("asdf").get())};
 		    expected.base = boost::none;
 		    expected.successfully_resolved = 2;
 		    expected.failed_to_resolve = 2;

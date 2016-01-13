@@ -20,16 +20,16 @@ boost::optional<std::pair<directory&, size_t>> resolve_path(
 	{
 		if(end)
 			return boost::none;
-		if(auto dirit = at(current->subdirectories(), part))
+		if(auto dirit = current->lookup_directory(part))
 		{
-			current = &dirit->second;
+			current = &dirit.get();
 			fd = current->directory_file;
 			continue;
 		}
-		if(auto fileit = at(current->files(), part))
+		if(auto fileit = current->lookup_file(part))
 		{
 			end = true;
-			fd = fileit->second;
+			fd = fileit.get();
 		}
 		else
 			return boost::none;
@@ -59,18 +59,18 @@ resolve_result resolve_dirs(const char* rawpath, wtfs& fs)
 				retval.base = boost::none;
 			}
 		}
-		else if(auto dirit = at(current->subdirectories(), part))
+		else if(auto dirit = current->lookup_directory(part))
 		{
-			current = &dirit->second;
+			current = &dirit.get();
 			auto d = std::make_pair(part, current);
 			retval.base = d;
 			retval.parents.push_back(d);
 			++retval.successfully_resolved;
 		}
-		else if(auto fileit = at(current->files(), part))
+		else if(auto fileit = current->lookup_file(part))
 		{
 			end = true;
-			retval.base = std::make_pair(part, fileit->second);
+			retval.base = std::make_pair(part, fileit.get());
 			++retval.successfully_resolved;
 		}
 		else
@@ -158,18 +158,70 @@ chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
 	}
 }
 
-boost::container::map<std::string, directory>& directory::subdirectories()
+void directory::insert(boost::string_ref component, directory dir)
 {
-	if(cached == cache_state::empty)
-		fill_cache();
-	return subdirectories_;
+	if(!lookup(component))
+	{
+		subdirectories_.emplace(component, dir);
+		cached = cache_state::dirty;
+	}
 }
 
-boost::container::map<std::string, size_t>& directory::files()
+void directory::insert(boost::string_ref component, size_t file)
+{
+	if(!lookup(component))
+	{
+		files_.emplace(component, file);
+		cached = cache_state::dirty;
+	}
+}
+
+void directory::erase(boost::string_ref component)
 {
 	if(cached == cache_state::empty)
 		fill_cache();
-	return files_;
+	subdirectories_.erase(component.to_string());
+	files_.erase(component.to_string());
+	cached = cache_state::dirty;
+}
+
+boost::optional<directory&> directory::lookup_directory(
+    boost::string_ref component)
+{
+	if(cached == cache_state::empty)
+		fill_cache();
+	if(auto fileopt = at(subdirectories_, component.to_string()))
+	{
+		return fileopt->second;
+	}
+	return boost::none;
+}
+
+boost::optional<size_t> directory::lookup_file(boost::string_ref component)
+{
+	if(cached == cache_state::empty)
+		fill_cache();
+	if(auto diropt = at(files_, component.to_string()))
+	{
+		return diropt->second;
+	}
+	return boost::none;
+}
+
+boost::optional<boost::variant<directory&, size_t>> directory::lookup(
+    boost::string_ref component)
+{
+	if(cached == cache_state::empty)
+		fill_cache();
+	if(auto fileopt = at(files_, component.to_string()))
+	{
+		return boost::variant<directory&, size_t>(fileopt->second);
+	}
+	if(auto diropt = at(subdirectories_, component.to_string()))
+	{
+		return boost::variant<directory&, size_t>(diropt->second);
+	}
+	return boost::none;
 }
 
 void directory::fill_cache()
@@ -180,6 +232,11 @@ void directory::fill_cache()
 void directory::dump_cache()
 {
 	cached = cache_state::clean;
+}
+
+size_t directory::entries_count()
+{
+	return subdirectories_.size() + files_.size();
 }
 
 file_content_iterator::file_content_iterator()

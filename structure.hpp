@@ -102,8 +102,25 @@ struct directory
 	size_t directory_file;
 	cache_state cached = cache_state::empty;
 	// using boost containers because they can be used with incomplete types
-	boost::container::map<std::string, directory>& subdirectories();
-	boost::container::map<std::string, size_t>& files();
+
+	template <typename Function>
+	void enumerate_entries(Function f)
+	{
+		for(auto&& x : subdirectories_)
+			f(x);
+		for(auto&& x : files_)
+			f(x);
+	}
+
+	void insert(boost::string_ref component, directory dir);
+	void insert(boost::string_ref component, size_t file);
+	size_t entries_count();
+	void erase(boost::string_ref component);
+
+	boost::optional<directory&> lookup_directory(boost::string_ref component);
+	boost::optional<size_t> lookup_file(boost::string_ref component);
+	boost::optional<boost::variant<directory&, size_t>> lookup(
+	    boost::string_ref component);
 
 	void fill_cache();
 	void dump_cache();

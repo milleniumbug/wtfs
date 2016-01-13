@@ -9,9 +9,10 @@
 #include <vector>
 #include <stack>
 #include <queue>
+#include <utility>
+#include <functional>
 #include <tuple>
 #include <type_traits>
-#include <experimental/string_view>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +24,7 @@
 #include <boost/tokenizer.hpp>
 #include <boost/variant.hpp>
 #include <boost/variant/polymorphic_get.hpp>
+#include <boost/utility/string_ref.hpp>
 #include <unistd.h>
 #include <fcntl.h>
 #include <endian.h>

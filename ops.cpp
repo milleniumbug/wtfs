@@ -54,16 +54,11 @@ int wtfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
 	filler(buf, "..", nullptr, 0);
 
 	auto& dir = ind->first;
-	for(auto& x : dir.subdirectories())
-	{
-		const char* rawpath = x.first.c_str();
-		filler(buf, rawpath, nullptr, 0);
-	}
-	for(auto& x : dir.files())
-	{
-		const char* rawpath = x.first.c_str();
-		filler(buf, rawpath, nullptr, 0);
-	}
+	dir.enumerate_entries([&](auto&& x)
+	    {
+		    const char* rawpath = x.first.c_str();
+		    filler(buf, rawpath, nullptr, 0);
+		});
 	return 0;
 }
 
@@ -91,9 +86,8 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 		file.user = ctx->uid;
 		file.group = ctx->gid;
 		auto last_component = path_from_rawpath(rawpath).back();
-		auto& direct_parent = resolv.parents.back();
-		direct_parent.second->files().emplace(
-		    last_component, allocated_file_index);
+		auto& direct_parent = resolv.parents.back().second;
+		direct_parent->insert(last_component, allocated_file_index);
 		return 0;
 	}
 	else
@@ -164,7 +158,7 @@ int wtfs_link(const char* rawfrom, const char* rawto)
 				return -EMLINK;
 			auto last_component = path_from_rawpath(rawto).back();
 			auto& parent_to = *resolv_to.parents.back().second;
-			parent_to.files().emplace(last_component, inode);
+			parent_to.insert(last_component, inode);
 			++file.hardlink_count;
 			return 0;
 		};
