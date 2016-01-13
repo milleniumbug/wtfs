@@ -80,14 +80,20 @@ class file_content_iterator
 	file_content_iterator();
 	file_content_iterator(wtfs_file& file, wtfs& fs);
 	off_t size();
+	off_t offset();
 
 	private:
-	char* pos_;
-	char* end_;
-	chunk* chunk_;
-	wtfs* fs_;
-	off_t* size_;
-	off_t offset_;
+	struct position
+	{
+		char* pos;
+		char* end;
+		struct chunk* chunk;
+		off_t offset;
+		wtfs* fs;
+		off_t* size;
+	};
+	// TODO
+	std::shared_ptr<position> position_;
 
 	friend class boost::iterator_core_access;
 
@@ -100,7 +106,7 @@ class file_content_iterator
 struct directory
 {
 	size_t directory_file;
-	cache_state cached = cache_state::empty;
+
 	// using boost containers because they can be used with incomplete types
 
 	template <typename Function>
@@ -126,8 +132,8 @@ struct directory
 	void dump_cache();
 
 	// Big Five
-	directory(size_t directory_file);
-	~directory() = default;
+	directory(size_t directory_file, wtfs& fs);
+	~directory();
 	directory(const directory&) = delete;
 	directory& operator=(const directory&) = delete;
 	directory(directory&&) = default;
@@ -136,6 +142,8 @@ struct directory
 	private:
 	boost::container::map<std::string, directory> subdirectories_;
 	boost::container::map<std::string, size_t> files_;
+	cache_state cached;
+	wtfs* fs_;
 };
 
 struct wtfs
@@ -261,4 +269,20 @@ std::unique_ptr<T, munmap_deleter> mmap_alloc(
 	auto res = mmap_alloc_impl(length, offset, fs);
 	return mmap_unique<T>(get<0>(res), get<1>(res), get<2>(res), get<3>(res),
 	    get<4>(res), get<5>(res));
+}
+
+template <typename T>
+boost::iterator_range<char*> make_raw_range(T& t)
+{
+	return boost::make_iterator_range(
+	    reinterpret_cast<char*>(std::addressof(t)),
+	    reinterpret_cast<char*>(std::addressof(t)) + sizeof(T));
+}
+
+template <typename T>
+boost::iterator_range<const char*> make_raw_range(const T& t)
+{
+	return boost::make_iterator_range(
+	    reinterpret_cast<const char*>(std::addressof(t)),
+	    reinterpret_cast<const char*>(std::addressof(t)) + sizeof(T));
 }

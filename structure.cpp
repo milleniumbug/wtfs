@@ -139,7 +139,7 @@ void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs)
 	// TODO: a serious implementation
 }
 
-wtfs::wtfs() : root(0)
+wtfs::wtfs() : root(0, *this)
 {
 }
 
@@ -230,11 +230,56 @@ boost::optional<boost::variant<directory&, size_t>> directory::lookup(
 
 void directory::fill_cache()
 {
+	auto& file = fs_->files[directory_file];
+	const off_t filesize = file.size;
+	file_content_iterator it(fs_->files[directory_file], *fs_);
+	std::string buffer;
+	size_t index;
+	auto index_raw_range = make_raw_range(index);
+	while(true)
+	{
+		if(filesize - it.offset() < static_cast<off_t>(sizeof index))
+			break;
+		std::copy_n(it,
+		    std::min(filesize - it.offset(), static_cast<off_t>(sizeof index)),
+		    index_raw_range.begin());
+		boost::algorithm::copy_until(it, file_content_iterator(),
+		    std::back_inserter(buffer), [&](char c)
+		    {
+			    return c == '\0';
+			});
+		if(S_ISDIR(file.mode))
+		{
+			directory newdir(index, *fs_);
+			insert(buffer, index);
+		}
+		else
+		{
+			insert(buffer, index);
+		}
+		buffer.clear();
+	}
 	cached = cache_state::clean;
 }
 
 void directory::dump_cache()
 {
+	auto& file = fs_->files[directory_file];
+	file.size = 0;
+	file_content_iterator it(file, *fs_);
+	const char null_terminator = '\0';
+	for(auto&& x : subdirectories_)
+	{
+		boost::copy(make_raw_range(x.second.directory_file), it);
+		boost::copy(x.first, it);
+		std::copy(&null_terminator, &null_terminator + 1, it);
+	}
+	for(auto&& x : files_)
+	{
+		boost::copy(make_raw_range(x.second), it);
+		boost::copy(x.first, it);
+		std::copy(&null_terminator, &null_terminator + 1, it);
+	}
 	cached = cache_state::clean;
 }
 
@@ -243,25 +288,28 @@ size_t directory::entries_count()
 	return subdirectories_.size() + files_.size();
 }
 
-directory::directory(size_t directory_file) : directory_file(directory_file)
+directory::directory(size_t directory_file, wtfs& fs)
+    : directory_file(directory_file)
 {
+	cached = cache_state::empty;
+	fs_ = &fs;
+}
+
+directory::~directory()
+{
+	dump_cache();
 }
 
 file_content_iterator::file_content_iterator()
-    : pos_(nullptr),
-      end_(nullptr),
-      chunk_(nullptr),
-      fs_(nullptr),
-      size_(nullptr),
-      offset_(0)
+    : position_(std::make_shared<position>())
 {
 }
 
 file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 {
-	this->fs_ = &fs;
-	this->size_ = &file.size;
-	this->offset_ = 0;
+	position_ = std::make_shared<position>();
+	position_->fs = &fs;
+	position_->size = &file.size;
 	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
@@ -269,46 +317,52 @@ void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 {
 	if(range == make_from(range, 0, 0))
 	{
-		range = allocate_chunk(1, *fs_);
-		chunk_->next_chunk_begin = range.first;
-		chunk_->next_chunk_end = range.second;
+		range = allocate_chunk(1, *position_->fs);
+		position_->chunk->next_chunk_begin = range.first;
+		position_->chunk->next_chunk_end = range.second;
 	}
-	chunk_ = fs_->load_chunk(range);
-	pos_ = chunk_->data;
+	position_->chunk = position_->fs->load_chunk(range);
+	position_->pos = position_->chunk->data;
 	off_t clusters = range.second - range.first + 1;
 	size_t chunk_size = clusters * block_size - sizeof(chunk);
-	end_ = pos_ + chunk_size;
+	position_->end = position_->pos + chunk_size;
 }
 
 void file_content_iterator::increment()
 {
-	++pos_;
-	++offset_;
-	auto s = *size_;
-	*size_ = std::max(s, offset_);
-	if(pos_ == end_)
-		next_chunk(
-		    std::make_pair(chunk_->next_chunk_begin, chunk_->next_chunk_end));
+	++position_->pos;
+	++position_->offset;
+	auto s = *position_->size;
+	*position_->size = std::max(s, position_->offset);
+	if(position_->pos == position_->end)
+		next_chunk(std::make_pair(position_->chunk->next_chunk_begin,
+		    position_->chunk->next_chunk_end));
 }
 
 bool file_content_iterator::equal(const file_content_iterator& other) const
 {
 	auto tied = [](const file_content_iterator& it)
 	{
-		return std::tie(it.pos_, it.chunk_, it.fs_);
+		return std::tie(
+		    it.position_->pos, it.position_->chunk, it.position_->fs);
 	};
 	return tied(*this) == tied(other);
 }
 
 char& file_content_iterator::dereference() const
 {
-	char& c = *pos_;
+	char& c = *position_->pos;
 	return c;
 }
 
 off_t file_content_iterator::size()
 {
-	return *size_;
+	return *position_->size;
+}
+
+off_t file_content_iterator::offset()
+{
+	return position_->offset;
 }
 
 mmap_alloc_impl_tuple mmap_alloc_impl(size_t length, off_t offset, wtfs& fs)

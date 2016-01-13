@@ -25,6 +25,9 @@
 #include <boost/variant.hpp>
 #include <boost/variant/polymorphic_get.hpp>
 #include <boost/utility/string_ref.hpp>
+#include <boost/range.hpp>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/algorithm/cxx11/copy_if.hpp>
 #include <unistd.h>
 #include <fcntl.h>
 #include <endian.h>

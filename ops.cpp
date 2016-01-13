@@ -97,15 +97,45 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 	}
 }
 
-int wtfs_mkdir(const char* path, mode_t mode)
+int wtfs_mkdir(const char* rawpath, mode_t mode)
 {
-	std::cout << "mkdir - not implemented\n";
-	return -44;
+	struct fuse_context* ctx = fuse_get_context();
+	auto& fs = *static_cast<wtfs*>(ctx->private_data);
+
+	auto resolv = resolve_dirs(rawpath, fs);
+	if(resolv.failed_to_resolve == 0)
+		return -EEXIST;
+	if(resolv.failed_to_resolve == 1 && !resolv.base)
+	{
+		size_t allocated_file_index = allocate_file(fs);
+		auto chunk = allocate_chunk(1, fs);
+		auto& file = fs.files[allocated_file_index];
+		file.size = 0;
+		file.first_chunk_begin = chunk.first;
+		file.first_chunk_end = chunk.second;
+		file.last_chunk_begin = chunk.first;
+		file.last_chunk_end = chunk.second;
+		file.mode = mode | S_IFDIR;
+		file.hardlink_count = 1;
+		// TODO: is this correct?
+		file.user = ctx->uid;
+		file.group = ctx->gid;
+		directory dir(allocated_file_index, fs);
+		auto last_component = path_from_rawpath(rawpath).back();
+		auto& direct_parent = resolv.parents.back().second;
+		direct_parent->insert(last_component, std::move(dir));
+		return 0;
+	}
+	else
+	{
+		return -ENOENT;
+	}
 }
 
 int wtfs_unlink(const char* path)
 {
-	// res = unlink(path);
+	// struct fuse_context* ctx = fuse_get_context();
+	// auto& fs = *static_cast<wtfs*>(ctx->private_data);
 	std::cerr << "not implemented: " << __func__ << "\n";
 	return -45;
 }
@@ -279,7 +309,7 @@ int wtfs_read(const char* path, char* buf, size_t size, off_t offset,
 	auto& fs = *static_cast<wtfs*>(ctx->private_data);
 
 	auto& it = *fs.file_descriptions[fi->fh];
-
+	assert(it.offset() == offset);
 	const auto s = std::min(static_cast<size_t>(it.size() - offset), size);
 	std::copy_n(it, s, buf);
 	return s;
@@ -329,14 +359,14 @@ auto fill_bpb = [](wtfs_bpb& bpb)
 	    std::end(bpb.header));
 	bpb.version = 1;
 	bpb.fdtable_offset = block_size * 17;
-	bpb.data_offset = bpb.fdtable_offset + block_size * 150;
+	bpb.data_offset = bpb.fdtable_offset + block_size * 15000;
 };
 
 auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 {
 	{
 		auto& f = fs.files[0];
-		f.size = 4000;
+		f.size = 0;
 		f.first_chunk_begin = 13;
 		f.first_chunk_end = 13;
 		f.last_chunk_begin = 13;
@@ -348,7 +378,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	}
 	{
 		auto& f = fs.files[1];
-		f.size = 5000;
+		f.size = 0;
 		f.first_chunk_begin = 10;
 		f.first_chunk_end = 11;
 		f.last_chunk_begin = 10;
@@ -360,7 +390,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	}
 	{
 		auto& f = fs.files[2];
-		f.size = 5;
+		f.size = 0;
 		f.first_chunk_begin = 14;
 		f.first_chunk_end = 14;
 		f.last_chunk_begin = 14;
@@ -372,7 +402,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	}
 	{
 		auto& f = fs.files[3];
-		f.size = 7000;
+		f.size = 9000;
 		f.first_chunk_begin = 16;
 		f.first_chunk_end = 16;
 		f.last_chunk_begin = 17;
@@ -384,11 +414,11 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	}
 	{
 		auto& f = fs.files[4];
-		f.size = 0;
+		f.size = 36000000;
 		f.first_chunk_begin = 18;
-		f.first_chunk_end = 18;
+		f.first_chunk_end = 9700;
 		f.last_chunk_begin = 18;
-		f.last_chunk_end = 18;
+		f.last_chunk_end = 9700;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -397,10 +427,10 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[5];
 		f.size = 0;
-		f.first_chunk_begin = 19;
-		f.first_chunk_end = 19;
-		f.last_chunk_begin = 19;
-		f.last_chunk_end = 19;
+		f.first_chunk_begin = 8;
+		f.first_chunk_end = 8;
+		f.last_chunk_begin = 8;
+		f.last_chunk_end = 8;
 		f.mode = S_IFDIR | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -465,26 +495,33 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
-			memset(block.data, 'c', 7000 - (block_size - sizeof(chunk)));
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
 		{
 			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(18, 18),
+			    std::make_pair(18, 9700),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 18 * block_size, fs));
+			        block_size * 10000, bpb.data_offset + 18 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
+			std::generate(block.data, block.data + 36000000,
+			    [c = unsigned('a')]() mutable
+			    {
+				    ++c;
+				    if(c > 'a' + 17)
+					    c = 'a';
+				    return c;
+				});
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
 		{
 			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(19, 19),
+			    std::make_pair(8, 8),
 			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 19 * block_size, fs));
+			        block_size, bpb.data_offset + 8 * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
 			memset(&block, 'z', block_size);
@@ -493,12 +530,12 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 		}
 	}
 	{
-		directory asdf_dir(1);
-		asdf_dir.insert("koles", 2);
+		directory asdf_dir(1, fs);
+		asdf_dir.insert("laffo_pusty_plik", 2);
 		asdf_dir.insert("ziom", 3);
-		directory laffo_pusty_katalog_dir(5);
+		directory laffo_pusty_katalog_dir(5, fs);
 		fs.root.insert("asdf", std::move(asdf_dir));
-		fs.root.insert("laffo_pusty_plik", 4);
+		fs.root.insert("dlugiplik", 4);
 		fs.root.insert(
 		    "laffo_pusty_katalog", std::move(laffo_pusty_katalog_dir));
 		fs.root.directory_file = 0;
@@ -535,8 +572,8 @@ void* wtfs_init(fuse_conn_info* conn)
 	    file_count * block_size, bpb.fdtable_offset, *fs);
 
 	fs->root.directory_file = 0;
-	// load root directory
-	// initialize allocator
+// load root directory
+// initialize allocator
 #ifdef WTFS_TEST1
 	fill_rest(*fs, bpb);
 #endif

@@ -49,12 +49,12 @@ void tests(Tester test, wtfs& fs)
 		});
 	test("resolve_dirs longer path", [&]()
 	    {
-		    resolve_result actual = resolve_dirs("/asdf/koles", fs);
+		    resolve_result actual = resolve_dirs("/asdf/laffo_pusty_plik", fs);
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root),
 		        std::make_pair("asdf",
 		                            &fs.root.lookup_directory("asdf").get())};
-		    expected.base = std::make_pair("koles", 2);
+		    expected.base = std::make_pair("laffo_pusty_plik", 2);
 		    expected.successfully_resolved = 3;
 		    expected.failed_to_resolve = 0;
 		    return resolve_result_tied(actual) == resolve_result_tied(expected);
@@ -73,7 +73,8 @@ void tests(Tester test, wtfs& fs)
 		});
 	test("resolve_dirs longer path file as directory", [&]()
 	    {
-		    resolve_result actual = resolve_dirs("/asdf/koles/noexist", fs);
+		    resolve_result actual =
+		        resolve_dirs("/asdf/laffo_pusty_plik/noexist", fs);
 		    resolve_result expected;
 		    expected.parents = {std::make_pair("root", &fs.root),
 		        std::make_pair("asdf",
