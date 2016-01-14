@@ -114,14 +114,13 @@ void deallocate_file(size_t fh, wtfs& fs)
 	// TODO: a serious implementation
 }
 
-std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs)
+off_t allocate_chunk(size_t length, wtfs& fs)
 {
 	// TODO: a serious implementation
 	off_t left = fs.allocator.chunk;
-	off_t right = left + length - 1;
 	fs.allocator.chunk += length;
 	fs.bpb->data_end += length;
-	std::pair<off_t, off_t> allocated_chunk = std::make_pair(left, right);
+	off_t allocated_chunk = off_t(left);
 	decltype(fs.chunk_cache)::iterator it;
 	bool inserted;
 	std::tie(it, inserted) = fs.chunk_cache.emplace(
@@ -130,12 +129,11 @@ std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs)
 	auto& block = *it->second;
 	memset(&block, 0xCC, block_size * length);
 	block.next_chunk_begin = 0;
-	block.next_chunk_end = 0;
 	assert(inserted);
 	return allocated_chunk;
 }
 
-void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs)
+void deallocate_chunk(off_t chunk, wtfs& fs)
 {
 	// TODO: a serious implementation
 }
@@ -144,7 +142,7 @@ wtfs::wtfs() : root(0, *this)
 {
 }
 
-chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
+chunk* wtfs::load_chunk(off_t key)
 {
 	auto it = chunk_cache.find(key);
 	if(it != chunk_cache.end())
@@ -156,8 +154,8 @@ chunk* wtfs::load_chunk(std::pair<off_t, off_t> key)
 		decltype(chunk_cache)::iterator it;
 		bool inserted;
 		std::tie(it, inserted) = chunk_cache.emplace(
-		    key, mmap_alloc<chunk>(block_size,
-		             bpb->data_offset + key.first * block_size, *this));
+		    key, mmap_alloc<chunk>(
+		             block_size, bpb->data_offset + key * block_size, *this));
 		assert(inserted);
 		return it->second.get();
 	}
@@ -312,22 +310,20 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 	position_ = std::make_shared<position>();
 	position_->fs = &fs;
 	position_->file = &file;
-	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
+	next_chunk(off_t(file.first_chunk_begin));
 }
 
-void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
+void file_content_iterator::next_chunk(off_t range)
 {
-	if(range == make_from(range, 0, 0))
+	if(range == make_from(range, 0))
 	{
 		range = allocate_chunk(1, *position_->fs);
-		position_->chunk->next_chunk_begin = range.first;
-		position_->chunk->next_chunk_end = range.second;
-		position_->file->last_chunk_begin = range.first;
-		position_->file->last_chunk_end = range.second;
+		position_->chunk->next_chunk_begin = range;
+		position_->file->last_chunk_begin = range;
 	}
 	position_->chunk = position_->fs->load_chunk(range);
 	position_->pos = position_->chunk->data;
-	off_t clusters = range.second - range.first + 1;
+	off_t clusters = position_->chunk->size;
 	size_t chunk_size = clusters * block_size - sizeof(chunk);
 	position_->end = position_->pos + chunk_size;
 }
@@ -339,8 +335,7 @@ void file_content_iterator::increment()
 	auto s = size();
 	position_->file->size = std::max(s, position_->offset);
 	if(position_->pos == position_->end)
-		next_chunk(std::make_pair(position_->chunk->next_chunk_begin,
-		    position_->chunk->next_chunk_end));
+		next_chunk(off_t(position_->chunk->next_chunk_begin));
 }
 
 bool file_content_iterator::equal(const file_content_iterator& other) const

@@ -52,14 +52,12 @@ struct wtfs_file
 {
 	off_t size;
 	off_t first_chunk_begin;
-	off_t first_chunk_end;
 	off_t last_chunk_begin;
-	off_t last_chunk_end;
 	mode_t mode;
 	nlink_t hardlink_count;
 	uid_t user;
 	gid_t group;
-	char data[block_size - 65];
+	char data[block_size - 49];
 };
 static_assert(sizeof(wtfs_file) == block_size, "sizeof incorrect");
 static_assert(
@@ -68,7 +66,7 @@ static_assert(
 struct chunk
 {
 	off_t next_chunk_begin;
-	off_t next_chunk_end;
+	off_t size;
 	char data[];
 };
 
@@ -99,7 +97,7 @@ class file_content_iterator
 
 	friend class boost::iterator_core_access;
 
-	void next_chunk(std::pair<off_t, off_t> nextptr);
+	void next_chunk(off_t nextptr);
 	void increment();
 	bool equal(const file_content_iterator& other) const;
 	char& dereference() const;
@@ -154,14 +152,13 @@ struct wtfs
 	unique_fd filesystem_fd;
 	std::unique_ptr<wtfs_bpb, munmap_deleter> bpb;
 	std::unique_ptr<wtfs_file[], munmap_deleter> files;
-	std::map<std::pair<off_t, off_t>, std::unique_ptr<chunk, munmap_deleter>>
-	    chunk_cache;
+	std::map<off_t, std::unique_ptr<chunk, munmap_deleter>> chunk_cache;
 	directory root;
 	std::map<uint64_t, std::unique_ptr<file_content_iterator>>
 	    file_descriptions;
 	off_t size;
 
-	chunk* load_chunk(std::pair<off_t, off_t> key);
+	chunk* load_chunk(off_t key);
 
 	struct wtfs_allocator
 	{
@@ -189,8 +186,8 @@ struct resolve_result
 resolve_result resolve_dirs(const char* rawpath, wtfs& fs);
 std::vector<std::string> path_from_rawpath(const char* rawpath);
 
-std::pair<off_t, off_t> allocate_chunk(size_t length, wtfs& fs);
-void deallocate_chunk(std::pair<off_t, off_t> chunk, wtfs& fs);
+off_t allocate_chunk(size_t length, wtfs& fs);
+void deallocate_chunk(off_t chunk, wtfs& fs);
 size_t allocate_file(wtfs& fs);
 uint64_t create_file_description(size_t fileindex, wtfs& fs);
 void destroy_file_description(uint64_t file_description, wtfs& fs);
