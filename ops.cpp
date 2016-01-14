@@ -443,71 +443,60 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		decltype(fs.chunk_cache)::iterator it;
 		bool inserted;
+		auto push_chunk = [&](off_t p, off_t s) -> chunk&
 		{
 			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(10, 11),
+			    std::make_pair(p, p + s - 1),
 			    mmap_alloc<chunk>(
-			        block_size * 2, bpb.data_offset + 10 * block_size, fs));
+			        block_size * s, bpb.data_offset + p * block_size, fs));
 			assert(inserted);
 			auto& block = *it->second;
-			memset(&block, 'z', block_size * 2);
+			memset(&block, 'z', block_size * s);
+			return block;
+		};
+		{
+			const off_t p = 10;
+			const off_t s = 2;
+			auto& block = push_chunk(p, s);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(13, 13),
-			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 13 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
+			const off_t p = 13;
+			const off_t s = 1;
+			auto& block = push_chunk(p, s);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(14, 14),
-			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 14 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
+			const off_t p = 14;
+			const off_t s = 1;
+			auto& block = push_chunk(p, s);
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 			memset(block.data, 'a', 5);
-			block.next_chunk_begin = 0;
-			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(16, 16),
-			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 16 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
-			memset(block.data, 'b', block_size - sizeof(chunk));
+			const off_t p = 16;
+			const off_t s = 1;
+			auto& block = push_chunk(p, s);
 			block.next_chunk_begin = 17;
 			block.next_chunk_end = 17;
+			memset(block.data, 'b', block_size - sizeof(chunk));
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(17, 17),
-			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 17 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
+			const off_t p = 17;
+			const off_t s = 1;
+			auto& block = push_chunk(p, s);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(18, 9700),
-			    mmap_alloc<chunk>(
-			        block_size * 10000, bpb.data_offset + 18 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
+			const off_t p = 18;
+			const off_t s = 9700 - p;
+			auto& block = push_chunk(p, s);
+			block.next_chunk_begin = 0;
+			block.next_chunk_end = 0;
 			std::generate(block.data, block.data + 35791394,
 			    [c = unsigned('a')]() mutable
 			    {
@@ -516,17 +505,11 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 					    c = 'a';
 				    return c;
 				});
-			block.next_chunk_begin = 0;
-			block.next_chunk_end = 0;
 		}
 		{
-			std::tie(it, inserted) = fs.chunk_cache.emplace(
-			    std::make_pair(8, 8),
-			    mmap_alloc<chunk>(
-			        block_size, bpb.data_offset + 8 * block_size, fs));
-			assert(inserted);
-			auto& block = *it->second;
-			memset(&block, 'z', block_size);
+			const off_t p = 8;
+			const off_t s = 1;
+			auto& block = push_chunk(p, s);
 			block.next_chunk_begin = 0;
 			block.next_chunk_end = 0;
 		}
