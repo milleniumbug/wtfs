@@ -92,7 +92,7 @@ class file_content_iterator
 		struct chunk* chunk;
 		off_t offset;
 		wtfs* fs;
-		off_t* size;
+		wtfs_file* file;
 	};
 	// TODO
 	std::shared_ptr<position> position_;

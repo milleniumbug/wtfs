@@ -311,7 +311,7 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 {
 	position_ = std::make_shared<position>();
 	position_->fs = &fs;
-	position_->size = &file.size;
+	position_->file = &file;
 	next_chunk(std::make_pair(file.first_chunk_begin, file.first_chunk_end));
 }
 
@@ -322,6 +322,8 @@ void file_content_iterator::next_chunk(std::pair<off_t, off_t> range)
 		range = allocate_chunk(1, *position_->fs);
 		position_->chunk->next_chunk_begin = range.first;
 		position_->chunk->next_chunk_end = range.second;
+		position_->file->last_chunk_begin = range.first;
+		position_->file->last_chunk_end = range.second;
 	}
 	position_->chunk = position_->fs->load_chunk(range);
 	position_->pos = position_->chunk->data;
@@ -334,8 +336,8 @@ void file_content_iterator::increment()
 {
 	++position_->pos;
 	++position_->offset;
-	auto s = *position_->size;
-	*position_->size = std::max(s, position_->offset);
+	auto s = size();
+	position_->file->size = std::max(s, position_->offset);
 	if(position_->pos == position_->end)
 		next_chunk(std::make_pair(position_->chunk->next_chunk_begin,
 		    position_->chunk->next_chunk_end));
@@ -359,7 +361,7 @@ char& file_content_iterator::dereference() const
 
 off_t file_content_iterator::size()
 {
-	return *position_->size;
+	return position_->file->size;
 }
 
 off_t file_content_iterator::offset()
