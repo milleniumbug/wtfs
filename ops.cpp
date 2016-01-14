@@ -78,8 +78,8 @@ int wtfs_mknod(const char* rawpath, mode_t mode, dev_t rdev)
 		auto chunk = allocate_chunk(1, fs);
 		auto& file = fs.files[allocated_file_index];
 		file.size = 0;
-		file.first_chunk_begin = chunk;
-		file.last_chunk_begin = chunk;
+		file.first_chunk = chunk;
+		file.last_chunk = chunk;
 		file.mode = mode;
 		file.hardlink_count = 1;
 		// TODO: is this correct?
@@ -110,8 +110,8 @@ int wtfs_mkdir(const char* rawpath, mode_t mode)
 		auto chunk = allocate_chunk(1, fs);
 		auto& file = fs.files[allocated_file_index];
 		file.size = 0;
-		file.first_chunk_begin = chunk;
-		file.last_chunk_begin = chunk;
+		file.first_chunk = chunk;
+		file.last_chunk = chunk;
 		file.mode = mode | S_IFDIR;
 		file.hardlink_count = 1;
 		// TODO: is this correct?
@@ -367,8 +367,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[0];
 		f.size = 0;
-		f.first_chunk_begin = 13;
-		f.last_chunk_begin = 13;
+		f.first_chunk = 13;
+		f.last_chunk = 13;
 		f.mode = S_IFDIR | 0755;
 		f.hardlink_count = 1;
 		f.user = 0;
@@ -377,8 +377,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[1];
 		f.size = 0;
-		f.first_chunk_begin = 10;
-		f.last_chunk_begin = 10;
+		f.first_chunk = 10;
+		f.last_chunk = 10;
 		f.mode = S_IFDIR | 0777;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -387,8 +387,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[2];
 		f.size = 0;
-		f.first_chunk_begin = 14;
-		f.last_chunk_begin = 14;
+		f.first_chunk = 14;
+		f.last_chunk = 14;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -397,8 +397,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[3];
 		f.size = 9000;
-		f.first_chunk_begin = 16;
-		f.last_chunk_begin = 17;
+		f.first_chunk = 16;
+		f.last_chunk = 17;
 		f.mode = S_IFREG | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -407,8 +407,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[4];
 		f.size = 35791394;
-		f.first_chunk_begin = 18;
-		f.last_chunk_begin = 18;
+		f.first_chunk = 18;
+		f.last_chunk = 18;
 		f.mode = S_IFREG | 0777;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -417,8 +417,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	{
 		auto& f = fs.files[5];
 		f.size = 0;
-		f.first_chunk_begin = 8;
-		f.last_chunk_begin = 8;
+		f.first_chunk = 8;
+		f.last_chunk = 8;
 		f.mode = S_IFDIR | 0740;
 		f.hardlink_count = 1;
 		f.user = 1000;
@@ -442,39 +442,39 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			const off_t p = 10;
 			const off_t s = 2;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 		}
 		{
 			const off_t p = 13;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 		}
 		{
 			const off_t p = 14;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 			memset(block.data, 'a', 5);
 		}
 		{
 			const off_t p = 16;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 17;
+			block.xor_pointer = 17;
 			memset(block.data, 'b', block_size - sizeof(chunk));
 		}
 		{
 			const off_t p = 17;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 		}
 		{
 			const off_t p = 18;
 			const off_t s = 9700 - p;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 			std::generate(block.data, block.data + 35791394,
 			    [c = unsigned('a')]() mutable
 			    {
@@ -488,7 +488,7 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			const off_t p = 8;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.next_chunk_begin = 0;
+			block.xor_pointer = 0;
 		}
 	}
 	{

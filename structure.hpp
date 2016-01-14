@@ -51,8 +51,8 @@ static_assert(
 struct wtfs_file
 {
 	off_t size;
-	off_t first_chunk_begin;
-	off_t last_chunk_begin;
+	off_t first_chunk;
+	off_t last_chunk;
 	mode_t mode;
 	nlink_t hardlink_count;
 	uid_t user;
@@ -65,7 +65,7 @@ static_assert(
 
 struct chunk
 {
-	off_t next_chunk_begin;
+	off_t xor_pointer;
 	off_t size;
 	char data[];
 };
@@ -89,6 +89,7 @@ class file_content_iterator
 		char* end;
 		struct chunk* chunk;
 		off_t offset;
+		off_t previous;
 		wtfs* fs;
 		wtfs_file* file;
 	};
