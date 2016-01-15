@@ -507,7 +507,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 	run_tests(fs);
 };
 
-void* wtfs_init(fuse_conn_info* conn)
+std::unique_ptr<wtfs> wtfs_initialize(
+    fuse_conn_info* conn, const bool fill_with_sample_data)
 {
 	struct fuse_context* ctx = fuse_get_context();
 	auto path = static_cast<const char*>(ctx->private_data);
@@ -521,9 +522,8 @@ void* wtfs_init(fuse_conn_info* conn)
 	perror("lseek");
 	fs->bpb = mmap_alloc<wtfs_bpb>(block_size, 0, *fs);
 	auto& bpb = *fs->bpb;
-#ifdef WTFS_TEST1
-	fill_bpb(bpb);
-#endif
+	if(fill_with_sample_data)
+		fill_bpb(bpb);
 	const char* expected = "WTFS";
 	const char* expected_end = expected + sizeof(bpb.header);
 	if(!std::equal(expected, expected_end, bpb.header) || bpb.version != 1)
@@ -543,18 +543,26 @@ void* wtfs_init(fuse_conn_info* conn)
 		    {
 			    return file.hardlink_count == 0;
 			});
-		assert(it != fs->files.get() + file_count);
+		assert(it != end);
 		fs->allocator.file = std::distance(beg, it);
 		fs->allocator.filepool_size = file_count;
 		fs->allocator.chunk = bpb.data_end;
 		fs->allocator.chunkpool_size =
 		    (fs->size - bpb.data_offset) / block_size;
 	}
+	if(fill_with_sample_data)
+		fill_rest(*fs, bpb);
+	return fs;
+}
+
+void* wtfs_init(fuse_conn_info* conn)
+{
 #ifdef WTFS_TEST1
-	fill_rest(*fs, bpb);
+	{
+		wtfs_initialize(conn, true);
+	}
 #endif
-	// sample data for a filesystem
-	return fs.release();
+	return wtfs_initialize(conn, false).release();
 }
 
 void wtfs_destroy(void* private_data)

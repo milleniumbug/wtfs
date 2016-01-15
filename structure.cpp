@@ -310,11 +310,13 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 	position_ = std::make_shared<position>();
 	position_->fs = &fs;
 	position_->file = &file;
+	position_->current = file.first_chunk;
 	next_chunk(file.first_chunk);
 }
 
-void file_content_iterator::next_chunk(off_t nextptr)
+void file_content_iterator::next_chunk(off_t xor_ptr)
 {
+	off_t nextptr = xor_ptr;
 	if(nextptr == 0)
 	{
 		nextptr = allocate_chunk(1, *position_->fs);

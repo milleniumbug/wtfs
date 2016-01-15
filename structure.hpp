@@ -90,6 +90,7 @@ class file_content_iterator
 		struct chunk* chunk;
 		off_t offset;
 		off_t previous;
+		off_t current;
 		wtfs* fs;
 		wtfs_file* file;
 	};
