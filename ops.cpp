@@ -442,39 +442,45 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			const off_t p = 10;
 			const off_t s = 2;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 0;
+			block.next_pointer = 0;
 		}
 		{
 			const off_t p = 13;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 0;
+			block.next_pointer = 0;
 		}
 		{
 			const off_t p = 14;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 0;
+			block.next_pointer = 0;
 			memset(block.data, 'a', 5);
 		}
 		{
 			const off_t p = 16;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 17;
+			block.prev_pointer = 0;
+			block.next_pointer = 17;
 			memset(block.data, 'b', block_size - sizeof(chunk));
 		}
 		{
 			const off_t p = 17;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 16;
+			block.next_pointer = 0;
 		}
 		{
 			const off_t p = 18;
 			const off_t s = 9700 - p;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 0;
+			block.next_pointer = 0;
 			std::generate(block.data, block.data + 35791394,
 			    [c = unsigned('a')]() mutable
 			    {
@@ -488,7 +494,8 @@ auto fill_rest = [](wtfs& fs, wtfs_bpb& bpb)
 			const off_t p = 8;
 			const off_t s = 1;
 			auto& block = push_chunk(p, s);
-			block.xor_pointer = 0;
+			block.prev_pointer = 0;
+			block.next_pointer = 0;
 		}
 	}
 	{

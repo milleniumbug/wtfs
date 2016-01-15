@@ -128,7 +128,9 @@ off_t allocate_chunk(size_t length, wtfs& fs)
 	                         fs.bpb->data_offset + left * block_size, fs));
 	auto& block = *it->second;
 	memset(&block, 0xCC, block_size * length);
-	block.xor_pointer = 0;
+	block.prev_pointer = 0;
+	block.next_pointer = 0;
+	block.size = length;
 	assert(inserted);
 	return allocated_chunk;
 }
@@ -314,14 +316,16 @@ file_content_iterator::file_content_iterator(wtfs_file& file, wtfs& fs)
 	next_chunk(file.first_chunk);
 }
 
-void file_content_iterator::next_chunk(off_t xor_ptr)
+void file_content_iterator::next_chunk(off_t nextptr)
 {
-	off_t nextptr = xor_ptr;
 	if(nextptr == 0)
 	{
 		nextptr = allocate_chunk(1, *position_->fs);
-		position_->chunk->xor_pointer = nextptr;
+		position_->chunk->next_pointer = nextptr;
 		position_->file->last_chunk = nextptr;
+		position_->fs->load_chunk(nextptr)->prev_pointer =
+		    position_->fs->load_chunk(position_->chunk->prev_pointer)
+		        ->next_pointer;
 	}
 	position_->chunk = position_->fs->load_chunk(nextptr);
 	position_->pos = position_->chunk->data;
@@ -337,7 +341,7 @@ void file_content_iterator::increment()
 	auto s = size();
 	position_->file->size = std::max(s, position_->offset);
 	if(position_->pos == position_->end)
-		next_chunk(position_->chunk->xor_pointer);
+		next_chunk(position_->chunk->next_pointer);
 }
 
 bool file_content_iterator::equal(const file_content_iterator& other) const

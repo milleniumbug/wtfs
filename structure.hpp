@@ -65,7 +65,8 @@ static_assert(
 
 struct chunk
 {
-	off_t xor_pointer;
+	off_t prev_pointer;
+	off_t next_pointer;
 	off_t size;
 	char data[];
 };
